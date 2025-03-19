@@ -6,12 +6,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="basicmicro",
     version="2.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Nathan Scherdin",
+    author_email="support@basicmicro.com",
     description="A modernized Python 3 library for controlling Basicmicro motor controllers",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/basicmicro",
+    url="https://github.com/acidtech/basicmicro_python",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
