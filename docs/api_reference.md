@@ -95,11 +95,11 @@ Returns:
 
 ## Duty Cycle Control
 
-Modern control using 16-bit duty cycle values (-32768 to +32768):
+Modern control using 16-bit duty cycle values (-32767 to +32767):
 
 ### `DutyM1(address, val)`
 
-Sets the duty cycle for motor 1 (-32768 to +32768).
+Sets the duty cycle for motor 1 (-32767 to +32767).
 
 ```python
 success = controller.DutyM1(address, 16384)  # 50% forward
@@ -107,7 +107,7 @@ success = controller.DutyM1(address, 16384)  # 50% forward
 
 ### `DutyM2(address, val)`
 
-Sets the duty cycle for motor 2 (-32768 to +32768).
+Sets the duty cycle for motor 2 (-32767 to +32767).
 
 ```python
 success = controller.DutyM2(address, -8192)  # 25% backward

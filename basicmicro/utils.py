@@ -37,14 +37,14 @@ def calc_mixed(fb: int, lr: int) -> Tuple[int, int]:
     into individual motor commands for differential drive systems.
     
     Args:
-        fb: Forward/backward value (-32768 to +32768)
+        fb: Forward/backward value (-32767 to +32767)
             Positive = forward, negative = backward
-        lr: Left/right value (-32768 to +32768)
+        lr: Left/right value (-32767 to +32767)
             Positive = right, negative = left
     
     Returns:
         Tuple[int, int]: Tuple of mixed mode values (left_motor, right_motor)
-            Both values will be in the range -32768 to +32768
+            Both values will be in the range -32767 to +32767
     """
     if (lr ^ fb) < 0:  # Signs are different?
         if abs(lr) > abs(fb):

@@ -111,7 +111,7 @@ controller.Open()
 
 address = 0x80  # Default controller address
 
-# Control motors by duty cycle (-32768 to +32768)
+# Control motors by duty cycle (-32767 to +32767)
 controller.DutyM1(address, 16384)  # 50% forward
 controller.DutyM2(address, -8192)  # 25% backward
 

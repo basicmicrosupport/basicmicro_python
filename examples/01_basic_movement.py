@@ -46,7 +46,7 @@ def main():
             
             # Motor 1 forward at 25% duty
             logger.info("Motor 1: 25% forward for 2 seconds")
-            controller.DutyM1(args.address, 8192)  # 8192 = 25% of 32768 (max)
+            controller.DutyM1(args.address, 8192)  # 8192 = 25% of 32767 (max)
             time.sleep(2)
             controller.DutyM1(args.address, 0)  # Stop
             

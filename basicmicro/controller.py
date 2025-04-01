@@ -60,6 +60,23 @@ class Basicmicro:
     SUCCESS = 1
     FAILURE = 0
 
+    DEFAULT_ADDRESS = 0x80
+    MIN_ADDRESS = 0x80
+    MAX_ADDRESS = 0x87
+    NVM_COMMIT_KEY = 0xE22EAB7A
+    RESTORE_DEFAULTS_KEY = 0xE22EAB7A # Often the same as NVM key
+    PID_FLOAT_SCALE_VEL = 65536.0
+    PID_FLOAT_SCALE_POS = 1024.0
+    LR_FLOAT_SCALE = 0x1000000  # For Set/Get M1/M2 LR
+    VOLTAGE_SCALE = 10.0
+    TEMP_SCALE = 10.0
+    MAX_DUTY = 32767
+    MIN_DUTY = -32767
+
+    ESTOP_AUTO_RESET = 0x55
+    ESTOP_SW_RESET = 0xAA
+    ESTOP_HW_RESET = 0x00
+
     def __init__(
         self, 
         comport: str, 
@@ -158,7 +175,7 @@ class Basicmicro:
             for retry in range(self.MAX_RETRY_COUNT):
                 logger.debug(f"Verifying communication attempt {retry+1}/{self.MAX_RETRY_COUNT}")
                 try:
-                    success, version = self.ReadVersion(0x80)
+                    success, version = self.ReadVersion(DEFAULT_ADDRESS)
                     if success:
                         logger.info(f"Connection established. Controller version: {version}")
                         return True
@@ -586,7 +603,7 @@ class Basicmicro:
 
         # power = +-127 at this point
             
-        duty = power * 32767 / 127
+        duty = power * MAX_DUTY / 127
         if cmd == Commands.M1FORWARD or cmd == Commands.M1BACKWARD or cmd == Commands.M17BIT:
             return self.DutyAccelM1(address, 0, duty)
         else:
@@ -622,7 +639,7 @@ class Basicmicro:
             self._ST_Power = power
 
         if self._ST_Power != -128 and self._ST_Turn != -128:
-            duties = calc_mixed(self._ST_Power * 32767 / 127, self._ST_Turn * 32767 / 127)
+            duties = calc_mixed(self._ST_Power * MAX_DUTY / 127, self._ST_Turn * MAX_DUTY / 127)
             return self.DutyM1M2(address, duties[0], duties[1])
         return False  # Both power and turn commands must be used at least once. Will return false until then
     
@@ -1073,7 +1090,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM1PID, int(d * 65536), int(p * 65536), int(i * 65536), qpps, types=["long", "long", "long", "long"])
+        return self._write(address, Commands.SETM1PID, int(d * PID_FLOAT_SCALE_VEL), int(p * PID_FLOAT_SCALE_VEL), int(i * PID_FLOAT_SCALE_VEL), qpps, types=["long", "long", "long", "long"])
 
     def SetM2VelocityPID(self, address: int, p: float, i: float, d: float, qpps: int) -> bool:
         """
@@ -1089,7 +1106,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM2PID, int(d * 65536), int(p * 65536), int(i * 65536), qpps, types=["long", "long", "long", "long"])
+        return self._write(address, Commands.SETM2PID, int(d * PID_FLOAT_SCALE_VEL), int(p * PID_FLOAT_SCALE_VEL), int(i * PID_FLOAT_SCALE_VEL), qpps, types=["long", "long", "long", "long"])
 
     def ReadISpeedM1(self, address: int) -> SpeedResult:
         """
@@ -1153,9 +1170,9 @@ class Basicmicro:
 
         Args:
             address: The address of the controller (0x80-0x87)
-            m1: The duty cycle value for motor 1 (-32768 to +32768)
+            m1: The duty cycle value for motor 1 (-32767 to +32767)
                 Positive values rotate forward, negative values rotate backward
-            m2: The duty cycle value for motor 2 (-32768 to +32768)
+            m2: The duty cycle value for motor 2 (-32767 to +32767)
                 Positive values rotate forward, negative values rotate backward
 
         Returns:
@@ -1502,7 +1519,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.READM1PID, types=["long", "long", "long", "long"])
         if data[0]:
-            return (True, data[1] / 65536.0, data[2] / 65536.0, data[3] / 65536.0, data[4])
+            return (True, data[1] / PID_FLOAT_SCALE_VEL, data[2] / PID_FLOAT_SCALE_VEL, data[3] / PID_FLOAT_SCALE_VEL, data[4])
         return (False, 0, 0, 0, 0)
 
     def ReadM2VelocityPID(self, address: int) -> PIDResult:
@@ -1522,7 +1539,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.READM2PID, types=["long", "long", "long", "long"])
         if data[0]:
-            return (True, data[1] / 65536.0, data[2] / 65536.0, data[3] / 65536.0, data[4])
+            return (True, data[1] / PID_FLOAT_SCALE_VEL, data[2] / PID_FLOAT_SCALE_VEL, data[3] / PID_FLOAT_SCALE_VEL, data[4])
         return (False, 0, 0, 0, 0)
 
     def SetMainVoltages(self, address: int, min_voltage: int, max_voltage: int, auto_offset: int) -> bool:
@@ -1602,7 +1619,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM1POSPID, int(kd * 1024), int(kp * 1024), int(ki * 1024), kimax, deadzone, min_pos, max_pos, types=["long", "long", "long", "long", "long", "long", "long"])
+        return self._write(address, Commands.SETM1POSPID, int(kd * PID_FLOAT_SCALE_POS), int(kp * PID_FLOAT_SCALE_POS), int(ki * PID_FLOAT_SCALE_POS), kimax, deadzone, min_pos, max_pos, types=["long", "long", "long", "long", "long", "long", "long"])
 
     def SetM2PositionPID(self, address: int, kp: float, ki: float, kd: float, kimax: int, deadzone: int, min_pos: int, max_pos: int) -> bool:
         """
@@ -1621,7 +1638,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM2POSPID, int(kd * 1024), int(kp * 1024), int(ki * 1024), kimax, deadzone, min_pos, max_pos, types=["long", "long", "long", "long", "long", "long", "long"])
+        return self._write(address, Commands.SETM2POSPID, int(kd * PID_FLOAT_SCALE_POS), int(kp * PID_FLOAT_SCALE_POS), int(ki * PID_FLOAT_SCALE_POS), kimax, deadzone, min_pos, max_pos, types=["long", "long", "long", "long", "long", "long", "long"])
 
     def ReadM1PositionPID(self, address: int) -> PositionPIDResult:
         """
@@ -1643,7 +1660,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.READM1POSPID, types=["long", "long", "long", "long", "long", "long", "long"])
         if data[0]:
-            return (True, data[1] / 1024.0, data[2] / 1024.0, data[3] / 1024.0, data[4], data[5], data[6], data[7])
+            return (True, data[1] / PID_FLOAT_SCALE_POS, data[2] / PID_FLOAT_SCALE_POS, data[3] / PID_FLOAT_SCALE_POS, data[4], data[5], data[6], data[7])
         return (False, 0, 0, 0, 0, 0, 0, 0)
         
     def ReadM2PositionPID(self, address: int) -> PositionPIDResult:
@@ -1666,7 +1683,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.READM2POSPID, types=["long", "long", "long", "long", "long", "long", "long"])
         if data[0]:
-            return (True, data[1] / 1024.0, data[2] / 1024.0, data[3] / 1024.0, data[4], data[5], data[6], data[7])
+            return (True, data[1] / PID_FLOAT_SCALE_POS, data[2] / PID_FLOAT_SCALE_POS, data[3] / PID_FLOAT_SCALE_POS, data[4], data[5], data[6], data[7])
         return (False, 0, 0, 0, 0, 0, 0, 0)
 
     def SpeedAccelDeccelPositionM1(self, address: int, accel: int, speed: int, deccel: int, position: int, buffer: int) -> bool:
@@ -1926,7 +1943,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.RESTOREDEFAULTS, 0xE22EAB7A, types=["long"])
+        return self._write(address, Commands.RESTOREDEFAULTS, RESTORE_DEFAULTS_KEY, types=["long"])
 
     def GetDefaultAccels(self, address: int) -> AccelsResult:
         """
@@ -2038,7 +2055,7 @@ class Basicmicro:
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.WRITENVM, 0xE22EAB7A, types=["long"])
+        return self._write(address, Commands.WRITENVM, NVM_COMMIT_KEY, types=["long"])
 
     def ReadNVM(self, address: int) -> bool:
         """
@@ -2385,7 +2402,7 @@ class Basicmicro:
     
         Args:
             address: Controller address (0x80 to 0x87)
-            position: Target position as percentage (-32768 to +32767)
+            position: Target position as percentage (-32767 to +32767)
             buffer: The buffer value to set.
         
         Returns:
@@ -2398,7 +2415,7 @@ class Basicmicro:
     
         Args:
             address: Controller address (0x80 to 0x87)
-            position: Target position as percentage (-32768 to +32767)
+            position: Target position as percentage (-32767 to +32767)
             buffer: The buffer value to set.
         
         Returns:
@@ -2411,8 +2428,8 @@ class Basicmicro:
     
         Args:
             address: Controller address (0x80 to 0x87)
-            position1: Motor 1 target position percentage (-32768 to +32767)
-            position2: Motor 2 target position percentage (-32768 to +32767)
+            position1: Motor 1 target position percentage (-32767 to +32767)
+            position2: Motor 2 target position percentage (-32767 to +32767)
             buffer: The buffer value to set.
         
         Returns:
@@ -2499,7 +2516,7 @@ class Basicmicro:
         Returns:
             bool: True if successful
         """
-        return self._write(address, Commands.SETM1LR, int(L * 0x1000000), int(R * 0x1000000), types=["long", "long"])
+        return self._write(address, Commands.SETM1LR, int(L * LR_FLOAT_SCALE), int(R * LR_FLOAT_SCALE), types=["long", "long"])
 
     def SetM2LR(self, address: int, L: float, R: float) -> bool:
         """Sets motor 2 Inductance/Resistance.
@@ -2512,7 +2529,7 @@ class Basicmicro:
         Returns:
             bool: True if successful
         """
-        return self._write(address, Commands.SETM2LR, int(L * 0x1000000), int(R * 0x1000000), types=["long", "long"])
+        return self._write(address, Commands.SETM2LR, int(L * LR_FLOAT_SCALE), int(R * LR_FLOAT_SCALE), types=["long", "long"])
 
     def GetM1LR(self, address: int) -> LRResult:
         """Reads motor 1 Inductance/Resistance.
@@ -2528,7 +2545,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.GETM1LR, types=["long", "long"])
         if data[0]:
-            return (True, float(data[1]) / 0x1000000, float(data[2]) / 0x1000000)
+            return (True, float(data[1]) / LR_FLOAT_SCALE, float(data[2]) / LR_FLOAT_SCALE)
         return (False, 0, 0)
 
     def GetM2LR(self, address: int) -> LRResult:
@@ -2545,7 +2562,7 @@ class Basicmicro:
         """
         data = self._read(address, Commands.GETM2LR, types=["long", "long"])
         if data[0]:
-            return (True, float(data[1]) / 0x1000000, float(data[2]) / 0x1000000)
+            return (True, float(data[1]) / LR_FLOAT_SCALE, float(data[2]) / LR_FLOAT_SCALE)
         return (False, 0, 0)
 
     def GetVolts(self, address: int) -> VoltsResult:
@@ -2584,7 +2601,7 @@ class Basicmicro:
         
         Args:
             address: Controller address (0x80 to 0x87)
-            duty1-duty5: Duty cycle values (-32768 to +32767)
+            duty1-duty5: Duty cycle values (-32767 to +32767)
             
         Returns:
             bool: True if successful, False otherwise
@@ -2600,7 +2617,7 @@ class Basicmicro:
         Returns:
             Tuple[bool, int, int, int, int, int]: (success, duty1, duty2, duty3, duty4, duty5)
                 success: True if read successful
-                duty1-5: Current duty cycle values (-32768 to +32767)
+                duty1-5: Current duty cycle values (-32767 to +32767)
         """
         return self._read(address, Commands.GETAUXDUTYS, types=["word", "word", "word", "word", "word"])
 
@@ -3351,7 +3368,7 @@ class Basicmicro:
         Raises:
             ValueError: If state value is invalid (not 0x55, 0xAA, or 0)
         """
-        if state not in [0x55, 0xAA, 0]:
+        if state not in [ESTOP_AUTO_RESET, ESTOP_SW_RESET, ESTOP_HW_RESET]:
             raise ValueError("Invalid state value. Must be 0x55 (auto reset), 0xAA (software reset), or 0 (hardware reset).")
     
         return self._write(address, Commands.SETESTOPLOCK, state, types=["byte"])

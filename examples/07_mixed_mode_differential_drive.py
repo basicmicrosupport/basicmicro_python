@@ -89,7 +89,7 @@ def main():
             
             # Both motors forward at different speeds
             logger.info("Both motors forward, M1 faster than M2 for 2 seconds")
-            # Values are in range -32768 to +32768
+            # Values are in range -32767 to +32767
             controller.DutyM1M2(args.address, 16384, 8192)  # M1=50%, M2=25%
             time.sleep(2)
             controller.DutyM1M2(args.address, 0, 0)  # Stop
