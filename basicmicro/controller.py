@@ -554,7 +554,7 @@ class Basicmicro:
             logger.error(f"Unexpected error reading checksum: {str(e)}")
             return (self.FAILURE, 0)
 
-def _ST_Single(self, cmd: int, address: int, power: int) -> bool:
+    def _ST_Single(self, cmd: int, address: int, power: int) -> bool:
         """Utility Function for Stubs. Sets the power for a single motor.
         
         Args:
@@ -1109,7 +1109,7 @@ def _ST_Single(self, cmd: int, address: int, power: int) -> bool:
         """
         return self._read(address, Commands.GETM2ISPEED, types=["long", "byte"])
         
-def DutyM1(self, address: int, val: int) -> bool:
+    def DutyM1(self, address: int, val: int) -> bool:
         """
         Sets the duty cycle for motor 1.
 
@@ -1471,7 +1471,7 @@ def DutyM1(self, address: int, val: int) -> bool:
         """
         return self._write(address, Commands.MIXEDDUTYACCEL, duty1, accel1, duty2, accel2, types=["sword", "long", "sword", "long"])
         
-def ReadM1VelocityPID(self, address: int) -> PIDResult:
+    def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         Reads the velocity PID constants for motor 1.
 
@@ -1488,10 +1488,7 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         data = self._read(address, Commands.READM1PID, types=["long", "long", "long", "long"])
         if data[0]:
-            data[1] /= 65536.0
-            data[2] /= 65536.0
-            data[3] /= 65536.0
-            return data
+            return (True, data[1] / 65536.0, data[2] / 65536.0, data[3] / 65536.0, data[4])
         return (False, 0, 0, 0, 0)
 
     def ReadM2VelocityPID(self, address: int) -> PIDResult:
@@ -1511,10 +1508,7 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         data = self._read(address, Commands.READM2PID, types=["long", "long", "long", "long"])
         if data[0]:
-            data[1] /= 65536.0
-            data[2] /= 65536.0
-            data[3] /= 65536.0
-            return data
+            return (True, data[1] / 65536.0, data[2] / 65536.0, data[3] / 65536.0, data[4])
         return (False, 0, 0, 0, 0)
 
     def SetMainVoltages(self, address: int, min_voltage: int, max_voltage: int, auto_offset: int) -> bool:
@@ -1635,7 +1629,7 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         data = self._read(address, Commands.READM1POSPID, types=["long", "long", "long", "long", "long", "long", "long"])
         if data[0]:
-            return (data[0], data[1] / 1024.0, data[2] / 1024.0, data[3] / 1024.0, data[4], data[5], data[6], data[7])
+            return (True, data[1] / 1024.0, data[2] / 1024.0, data[3] / 1024.0, data[4], data[5], data[6], data[7])
         return (False, 0, 0, 0, 0, 0, 0, 0)
         
     def ReadM2PositionPID(self, address: int) -> PositionPIDResult:
@@ -1658,10 +1652,7 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         data = self._read(address, Commands.READM2POSPID, types=["long", "long", "long", "long", "long", "long", "long"])
         if data[0]:
-            data[1] /= 1024.0
-            data[2] /= 1024.0
-            data[3] /= 1024.0
-            return data
+            return (True, data[1] / 1024.0, data[2] / 1024.0, data[3] / 1024.0, data[4], data[5], data[6], data[7])
         return (False, 0, 0, 0, 0, 0, 0, 0)
 
     def SpeedAccelDeccelPositionM1(self, address: int, accel: int, speed: int, deccel: int, position: int, buffer: int) -> bool:
@@ -1719,31 +1710,59 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         return self._write(address, Commands.MIXEDSPEEDACCELDECCELPOS, accel1, speed1, deccel1, position1, accel2, speed2, deccel2, position2, buffer, types=["long", "long", "long", "long", "long", "long", "long", "long", "byte"])
 
-    def SetM1DefaultAccel(self, address: int, accel: int) -> bool:
+    def SetM1DefaultAccel(self, address: int, accel: int, decel: int) -> bool:
         """
-        Sets the default acceleration for motor 1.
-
+        Sets the default acceleration and deceleration for motor 1.
+    
         Args:
             address: The address of the controller.
             accel: The default acceleration value to set.
-
+            decel: The default deceleration value to set.
+        
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM1DEFAULTACCEL, accel, types=["long"])
+        return self._write(address, Commands.SETM1DEFAULTACCEL, accel, decel, types=["long", "long"])
 
-    def SetM2DefaultAccel(self, address: int, accel: int) -> bool:
+    def SetM2DefaultAccel(self, address: int, accel: int, decel: int) -> bool:
         """
-        Sets the default acceleration for motor 2.
-
+        Sets the default acceleration and deceleration for motor 2.
+    
         Args:
             address: The address of the controller.
             accel: The default acceleration value to set.
-
+            decel: The default deceleration value to set.
+        
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETM2DEFAULTACCEL, accel, types=["long"])
+        return self._write(address, Commands.SETM2DEFAULTACCEL, accel, decel, types=["long", "long"])
+
+    def SetM1DefaultSpeed(self, address: int, speed: int) -> bool:
+        """
+        Sets the default speed for motor 1.
+    
+        Args:
+            address: The address of the controller.
+            speed: The default speed value to set.
+        
+        Returns:
+            bool: True if successful.
+        """
+        return self._write(address, Commands.SETM1DEFAULTSPEED, speed, types=["word"])
+
+    def SetM2DefaultSpeed(self, address: int, speed: int) -> bool:
+        """
+        Sets the default speed for motor 2.
+    
+        Args:
+            address: The address of the controller.
+            speed: The default speed value to set.
+        
+        Returns:
+            bool: True if successful.
+        """
+        return self._write(address, Commands.SETM2DEFAULTSPEED, speed, types=["word"])
 
     def GetDefaultSpeeds(self, address: int) -> Tuple[bool, int, int]:
         """
@@ -1760,7 +1779,7 @@ def ReadM1VelocityPID(self, address: int) -> PIDResult:
         """
         return self._read(address, Commands.GETDEFAULTSPEEDS, types=["word", "word"])
         
-def GetStatus(self, address: int) -> StatusResult:
+    def GetStatus(self, address: int) -> StatusResult:
         """
         Reads the status of the controller.
 
@@ -2368,7 +2387,7 @@ def GetStatus(self, address: int) -> StatusResult:
         """
         return self._write(address, Commands.MIXEDPPOS, position1, position2, buffer, types=["sword", "sword", "byte"])
         
-def SetPosErrorLimit(self, address: int, limit1: int, limit2: int) -> bool:
+    def SetPosErrorLimit(self, address: int, limit1: int, limit2: int) -> bool:
         """Sets position error limits for both motors.
     
         Args:
@@ -2610,7 +2629,7 @@ def SetPosErrorLimit(self, address: int, limit1: int, limit2: int) -> bool:
         """
         return self._read(address, Commands.GETM2MAXCURRENT, types=["long", "long"])
         
-def SetDOUT(self, address: int, index: int, action: int) -> bool:
+    def SetDOUT(self, address: int, index: int, action: int) -> bool:
         """Sets the digital output.
         
         Args:
@@ -2865,7 +2884,7 @@ def SetDOUT(self, address: int, index: int, action: int) -> bool:
         logger.error(f"Failed to read signals from address 0x{address:02x} after {self._trystimeout} attempts")
         return (False, 0, [])
         
-def SetStream(self, address: int, index: int, stream_type: int, baudrate: int, timeout: int) -> bool:
+    def SetStream(self, address: int, index: int, stream_type: int, baudrate: int, timeout: int) -> bool:
         """Sets the stream parameters.
     
         Args:
@@ -3072,7 +3091,7 @@ def SetStream(self, address: int, index: int, stream_type: int, baudrate: int, t
             return (True, idledelay1, idlemode1, idledelay2, idlemode2)    
         return (False, 0, False, 0, False)
         
-def CANBufferState(self, address: int) -> CANBufferResult:
+    def CANBufferState(self, address: int) -> CANBufferResult:
         """Gets the count of available CAN packets.
     
         Args:
@@ -3330,32 +3349,34 @@ def CANBufferState(self, address: int) -> CANBufferResult:
         """
         return self._write(address, Commands.STOPSCRIPT)
 
-    def SetPWMMode(self, address: int, mode: int) -> bool:
+    def SetPWMMode(self, address: int, mode1: int, mode2: int) -> bool:
         """
-        Sets the PWM mode.
+        Sets the PWM modes for both motors.
 
         Args:
             address: The address of the controller.
-            mode: The PWM mode to set.
+            mode1: The PWM mode to set for motor 1.
+            mode2: The PWM mode to set for motor 2.
 
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETPWMMODE, mode, types=["byte"])
+        return self._write(address, Commands.SETPWMMODE, mode1, mode2, types=["byte", "byte"])
 
     def ReadPWMMode(self, address: int) -> PWMModeResult:
         """
-        Reads the PWM mode.
+        Reads the PWM modes for both motors.
 
         Args:
             address: The address of the controller.
 
         Returns:
-            PWMModeResult: (success, mode)
+            PWMModeResult: (success, mode1, mode2)
                 success: True if read successful.
-                mode: The PWM mode.
+                mode1: The PWM mode for motor 1.
+                mode2: The PWM mode for motor 2.
         """
-        return self._read(address, Commands.GETPWMMODE, types=["byte"])
+        return self._read(address, Commands.GETPWMMODE, types=["byte", "byte"])
 
     def ReadEeprom(self, address: int, ee_address: int) -> EEPROMResult:
         """
