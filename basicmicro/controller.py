@@ -69,13 +69,13 @@ class Basicmicro:
         verbose: bool = False
     ) -> None:
         """Initializes the Basicmicro interface.
-        
+    
         Args:
-            comport: The COM port to use (e.g., 'COM3')
+            comport: The COM port to use (e.g., 'COM3' on Windows, '/dev/ttyACM0' on Linux)
             rate: The baud rate for the serial communication
-            timeout: The timeout for serial communication
-            retries: The number of retries for communication
-            verbose: Enable detailed debug logging
+            timeout: The timeout for serial communication in seconds
+            retries: The number of retries for communication operations
+            verbose: Enable detailed debug logging (sets logging level to DEBUG)
         """
         # Configure logger verbosity
         if verbose and logger.level > logging.DEBUG:
@@ -206,13 +206,13 @@ class Basicmicro:
 
     def _sendcommand(self, address: int, command: int) -> None:
         """Sends a command to the controller.
-        
+    
         Args:
-            address: The address of the controller
+            address: The address of the controller (0x80-0x87)
             command: The command to send
-        
+    
         Raises:
-            CommunicationError: If sending the command fails
+            CommunicationError: If sending the command fails due to serial port issues
         """
         logger.debug(f"Sending command: address=0x{address:02x}, command=0x{command:02x}")
         self.crc_clear()
@@ -387,16 +387,21 @@ class Basicmicro:
         and CRC16.
 
         Args:
-            address: The address of the controller
+            address: The address of the controller (0x80-0x87)
             cmd: The command to send
             *args: Variable number of arguments to write
             **kwargs: Keyword arguments that specify how to write each argument
                 - types (list or str): Specifies the data type for each argument
                     Supported types: 'byte', 'sbyte', 'word', 'sword', 'long', 'slong'
-                - defaults to 'byte' if not specified
+                    Can be provided as a comma-separated string or a list
+                    Must match the number of arguments in *args
 
         Returns:
             bool: True if successful, False otherwise
+        
+        Raises:
+            ValueError: If number of type specifications doesn't match number of arguments
+            ValueError: If an unsupported type is specified
         """
         logger.debug(f"Write: address=0x{address:02x}, cmd=0x{cmd:02x}, args={args}")
         # Determine the types of arguments
@@ -459,12 +464,12 @@ class Basicmicro:
         specified in the types parameter, verifying the CRC16 checksum.
 
         Args:
-            address: The address of the controller
+            address: The address of the controller (0x80-0x87)
             cmd: The command to send
-            *args: Optional positional arguments (unused, for compatibility)
             **kwargs: Keyword arguments that specify how to read data
                 - types (list or str): Specifies the data types to read
                     Supported types: 'byte', 'sbyte', 'word', 'sword', 'long', 'slong'
+                    Can be provided as a comma-separated string or a list
                 - retry_on_error (bool): Whether to retry on error, defaults to True
 
         Returns:
@@ -920,13 +925,17 @@ class Basicmicro:
         """
         Reads the firmware version of the controller.
 
+        This method attempts to read the firmware version string from the controller
+        with multiple retries if needed. It parses the raw byte response into a string
+        and verifies the checksum.
+
         Args:
-            address: The address of the controller.
+            address: The address of the controller (0x80-0x87)
 
         Returns:
             VersionResult: (success, version)
-                success: True if read successful.
-                version: The firmware version.
+                success: True if read successful
+                version: The firmware version as a string
         """
         logger.debug(f"Reading firmware version from address=0x{address:02x}")
         for _ in range(self._trystimeout):
@@ -1137,15 +1146,17 @@ class Basicmicro:
 
     def DutyM1M2(self, address: int, m1: int, m2: int) -> bool:
         """
-        Sets the duty cycle for both motors.
+        Sets the duty cycle for both motors simultaneously.
 
         Args:
-            address: The address of the controller.
-            m1: The duty cycle value for motor 1.
-            m2: The duty cycle value for motor 2.
+            address: The address of the controller (0x80-0x87)
+            m1: The duty cycle value for motor 1 (-32768 to +32768)
+                Positive values rotate forward, negative values rotate backward
+            m2: The duty cycle value for motor 2 (-32768 to +32768)
+                Positive values rotate forward, negative values rotate backward
 
         Returns:
-            bool: True if successful.
+            bool: True if successful
         """
         return self._write(address, Commands.MIXEDDUTY, m1, m2, types=["sword", "sword"])
 
@@ -2042,13 +2053,17 @@ class Basicmicro:
         """Sets the device serial number (36 bytes).
 
         Args:
-            address: controller address (0x80 to 0x87)
+            address: Controller address (0x80 to 0x87)
             serial_number: Serial number string (36 characters max)
 
         Returns:
             bool: True if successful, False otherwise
 
-        Note: Serial number will be padded with nulls if less than 36 bytes
+        Notes:
+            - Serial number will be padded with null bytes if less than 36 bytes
+            - If longer than 36 bytes, it will be truncated
+            - Only the specified length of characters will be displayed when read back
+    
         Raises:
             ValueError: If serial_number is not a string
         """
@@ -2085,7 +2100,7 @@ class Basicmicro:
         Returns:
             SerialNumberResult: (success, serial_number)
                 success: True if read successful
-                serial_number: Serial number string
+                serial_number: Serial number string with null characters stripped
         """
         logger.info(f"Reading serial number for address 0x{address:02x}")
 
@@ -2124,21 +2139,21 @@ class Basicmicro:
         logger.error(f"Failed to read serial number after {self._trystimeout} attempts")
         return (False, '')
         
-#Warning(TTL Serial): If control mode is changed from packet serial mode when setting config communications will be lost!
-    #Warning(TTL Serial): If baudrate of packet serial mode is changed communications will be lost!
     def SetConfig(self, address: int, config: int) -> bool:
         """
-        Sets the configuration.
+        Sets the configuration of the controller.
 
         Args:
-            address: The address of the controller.
-            config: The configuration value to set.
+            address: The address of the controller (0x80-0x87)
+            config: The configuration value to set (16-bit)
+                Bit meanings vary by controller model - see controller documentation
 
         Returns:
-            bool: True if successful.
+            bool: True if successful
             
-        Warning: If control mode is changed from packet serial mode, communications will be lost!
-        Warning: If baudrate of packet serial mode is changed, communications will be lost!
+        Warnings:
+            - If control mode is changed from packet serial mode, communications will be lost!
+            - If baudrate of packet serial mode is changed, communications will be lost!
         """
         return self._write(address, Commands.SETCONFIG, config, types=["word"])
 
@@ -2816,16 +2831,33 @@ class Basicmicro:
         return False
 
     def GetSignals(self, address: int) -> SignalsResult:
-        """Gets the signal parameters.
-    
+        """Gets the signal parameters configured in the controller.
+
         Args:
             address: Controller address (0x80 to 0x87)
-    
+
         Returns:
             SignalsResult: (success, count, signals)
                 success: True if read successful
-                count: Number of signals
-                signals: List of signal parameters
+                count: Number of signals configured
+                signals: List of dictionaries containing signal parameters:
+                    - type: Signal type (0-255, see controller documentation)
+                    - mode: Operating mode (0-255, see controller documentation)
+                    - target: Target channel (0-255)
+                    - min_action: Minimum action value (0-65535)
+                    - max_action: Maximum action value (0-65535)
+                    - lowpass: Lowpass filter value (0-255)
+                    - timeout: Signal timeout in milliseconds
+                    - loadhome: Home position value
+                    - min_val: Minimum input value
+                    - max_val: Maximum input value
+                    - center: Center input value
+                    - deadband: Deadband value
+                    - powerexp: Power exponent value
+                    - minout: Minimum output value
+                    - maxout: Maximum output value
+                    - powermin: Minimum power value
+                    - potentiometer: Potentiometer configuration
         """
         logger.info(f"Reading signal parameters for address 0x{address:02x}")
 
@@ -2913,16 +2945,19 @@ class Basicmicro:
         return False
 
     def GetStreams(self, address: int) -> StreamsResult:
-        """Gets the stream parameters.
-    
+        """Gets the stream parameters configured in the controller.
+
         Args:
             address: Controller address (0x80 to 0x87)
-    
+
         Returns:
             StreamsResult: (success, count, streams)
                 success: True if read successful
-                count: Number of streams
-                streams: List of stream parameters
+                count: Number of streams configured
+                streams: List of dictionaries containing stream parameters:
+                    - type: Stream type (0 = disabled, 1 = UART, 2 = I2C, 3 = SPI)
+                    - baudrate: Communication baudrate (for UART) or clock rate (for I2C/SPI)
+                    - timeout: Communication timeout in milliseconds
         """
         logger.info(f"Reading stream parameters for address 0x{address:02x}")
 
@@ -2968,16 +3003,21 @@ class Basicmicro:
         return (False, 0, [])
 
     def GetSignalsData(self, address: int) -> SignalsDataResult:
-        """Gets the signals data.
-    
+        """Gets the current signals data from the controller.
+
         Args:
             address: Controller address (0x80 to 0x87)
-    
+
         Returns:
             SignalsDataResult: (success, count, signals_data)
                 success: True if read successful
-                count: Number of signals data
-                signals_data: List of signals data
+                count: Number of signal data entries
+                signals_data: List of dictionaries containing signal data:
+                    - command: Current command value
+                    - position: Current position value
+                    - percent: Current percentage value (0-100%)
+                    - speed: Current speed value
+                    - speeds: Speed status information
         """
         logger.info(f"Reading signals data from address 0x{address:02x}")
     
@@ -3110,11 +3150,15 @@ class Basicmicro:
         Args:
             address: Controller address (0x80 to 0x87)
             cob_id: CAN object identifier (0 to 2047)
-            RTR: Remote Transmission Request (0 or 1)
+            RTR: Remote Transmission Request (0 = data frame, 1 = remote frame)
             data: List of data bytes (length must be <= 8 bytes)
-    
+
         Returns:
             bool: True if successful
+        
+        Notes:
+            - Data will be padded with zeros to always send 8 bytes
+            - For RTR=1, data length is still needed but data content is ignored
             
         Raises:
             ValueError: If data length is more than 8 bytes
@@ -3136,18 +3180,22 @@ class Basicmicro:
                          )
 
     def CANGetPacket(self, address: int) -> CANPacketResult:
-        """Reads a CAN packet.
-    
+        """Reads a CAN packet from the controller.
+
         Args:
             address: Controller address (0x80 to 0x87)
-    
+
         Returns:
             CANPacketResult: (success, cob_id, RTR, length, data)
                 success: True if read successful
                 cob_id: CAN object identifier
-                RTR: Remote Transmission Request
-                length: Length of the data
-                data: List of data bytes
+                RTR: Remote Transmission Request (0 = data frame, 1 = remote frame)
+                length: Length of the data (actual valid bytes)
+                data: List of data bytes (always 8 bytes, padded with zeros)
+            
+        Notes:
+            - Returns success=False if no valid packet is available
+            - First byte of a valid packet is 0xFF (used for internal validation)
         """
         val = self._read(address, Commands.CANGETPACKET, types=["byte", "word", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte"])
         if val[0] and val[1] == 0xFF:  # First byte should be 0xFF for a valid packet
@@ -3162,18 +3210,18 @@ class Basicmicro:
 
     def CANOpenWriteLocalDict(self, address: int, wIndex: int, bSubindex: int, lValue: int, bSize: int) -> Tuple[bool, int]:
         """Writes to the local CANopen dictionary.
-    
+
         Args:
             address: Controller address (0x80 to 0x87)
-            wIndex: Index in the dictionary
-            bSubindex: Subindex in the dictionary
-            lValue: Value to write
-            bSize: Size of the value
-    
+            wIndex: Index in the dictionary (16-bit)
+            bSubindex: Subindex in the dictionary (8-bit)
+            lValue: Value to write (32-bit)
+            bSize: Size of the value in bytes (1, 2, or 4)
+
         Returns:
             Tuple[bool, int]: (success, lResult)
                 success: True if successful
-                lResult: Result of the write operation
+                lResult: Result of the write operation (0 = success, non-zero = error code)
         """
         logger.debug(f"Writing to CANopen dictionary at address=0x{address:02x}, index=0x{wIndex:04x}, subindex=0x{bSubindex:02x}, value={lValue}, size={bSize}")
 
@@ -3203,19 +3251,19 @@ class Basicmicro:
 
     def CANOpenReadLocalDict(self, address: int, wIndex: int, bSubindex: int) -> CANOpenResult:
         """Reads from the local CANopen dictionary.
-        
+    
         Args:
             address: Controller address (0x80 to 0x87)
-            wIndex: Index in the dictionary
-            bSubindex: Subindex in the dictionary
-        
+            wIndex: Index in the dictionary (16-bit)
+            bSubindex: Subindex in the dictionary (8-bit)
+    
         Returns:
             CANOpenResult: (success, lValue, bSize, bType, lResult)
                 success: True if read successful
-                lValue: Value read
-                bSize: Size of the value
-                bType: Type of the value
-                lResult: Result of the read operation
+                lValue: Value read (32-bit)
+                bSize: Size of the value in bytes (1, 2, or 4)
+                bType: Type of the value (0 = integer, 1 = boolean, 2 = string)
+                lResult: Result of the read operation (0 = success, non-zero = error code)
         """
         logger.debug(f"Reading from CANopen dictionary at address=0x{address:02x}, index=0x{wIndex:04x}, subindex=0x{bSubindex:02x}")
 
@@ -3267,16 +3315,19 @@ class Basicmicro:
 
     def SetEStopLock(self, address: int, state: int) -> bool:
         """Sets the emergency stop lock state.
-        
+    
         Args:
             address: Controller address (0x80 to 0x87)
-            state: State value (0x55 for automatic reset, 0xAA for software reset, 0 for hardware reset)
-        
+            state: Lock state value:
+                - 0x55: Automatic reset (resumes after e-stop condition clears)
+                - 0xAA: Software reset (requires ResetEStop command)
+                - 0: Hardware reset (requires physical reset)
+    
         Returns:
             bool: True if successful
-            
+        
         Raises:
-            ValueError: If state value is invalid
+            ValueError: If state value is invalid (not 0x55, 0xAA, or 0)
         """
         if state not in [0x55, 0xAA, 0]:
             raise ValueError("Invalid state value. Must be 0x55, 0xAA, or 0.")
@@ -3298,14 +3349,20 @@ class Basicmicro:
 
     def SetScriptAutoRun(self, address: int, scriptauto_time: int) -> bool:
         """Sets the script auto run time.
-        
+    
         Args:
             address: Controller address (0x80 to 0x87)
-            scriptauto_time: Auto run time in milliseconds. Values less than 100 will be set to 0 (script does not autorun).
-        
+            scriptauto_time: Auto run time in milliseconds. 
+                - 0: Script does not autorun
+                - 100-65535: Script autoruns after this many milliseconds
+    
         Returns:
             bool: True if successful
-            
+        
+        Notes:
+            Values less than 100 (except 0) will not autorun the script due to 
+            controller limitations.
+        
         Raises:
             ValueError: If scriptauto_time is less than 100 and not 0
         """
@@ -3383,13 +3440,16 @@ class Basicmicro:
         Reads a word from the EEPROM.
 
         Args:
-            address: The address of the controller.
-            ee_address: The EEPROM address to read from.
+            address: The address of the controller (0x80-0x87)
+            ee_address: The EEPROM address to read from (0-255)
 
         Returns:
             EEPROMResult: (success, value)
-                success: True if read successful.
-                value: The word value read from EEPROM.
+                success: True if read successful
+                value: The word value read from EEPROM (16-bit) or error code:
+                    -0x10000: Timeout error occurred
+                    -0x20000: CRC mismatch error
+                    -0x30000: Write error occurred
         """
         # Define error codes as constants for better readability
         CRC_MISMATCH = -0x20000
