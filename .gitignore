@@ -20,3 +20,6 @@ env/
 # Temporary files
 *.log
 *.tmp
+
+#visual studio temp files
+.vs/
