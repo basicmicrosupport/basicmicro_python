@@ -456,7 +456,7 @@ class Basicmicro:
         logger.debug("No acknowledgment received")
         return False
 
-    def _read(self, address: int, cmd: int, *args, **kwargs) -> Tuple[bool, ...]:
+    def _read(self, address: int, cmd: int, **kwargs) -> Tuple[bool, ...]:
         """
         Generic read method that reads data from the controller based on specified types.
 
@@ -476,6 +476,9 @@ class Basicmicro:
             Tuple[bool, ...]: (success, *values)
                 success: True if read successful
                 *values: The values read according to the specified types
+            
+        Raises:
+            ValueError: If an unsupported type is specified
         """
         logger.debug(f"Read: address=0x{address:02x}, cmd=0x{cmd:02x}")
         retry_on_error = kwargs.get('retry_on_error', True)
@@ -508,7 +511,7 @@ class Basicmicro:
             except Exception as e:
                 logger.warning(f"Error flushing input buffer: {str(e)}")
                 # Continue trying despite the error
-                
+            
             self._sendcommand(address, cmd)
             result = [self.SUCCESS]
 
@@ -2073,6 +2076,11 @@ class Basicmicro:
             logger.error("Serial number must be a string")
             raise ValueError("Serial number must be a string")
 
+        # Truncate if longer than 36 bytes
+        if len(serial_number) > 36:
+            logger.warning(f"Serial number too long, truncating to 36 characters")
+            serial_number = serial_number[:36]
+        
         # Pad or truncate to exactly 36 bytes
         serial_bytes = serial_number.encode('ascii').ljust(36, b'\0')
 
@@ -2081,13 +2089,15 @@ class Basicmicro:
 
             try:
                 # Write the count of characters and all 36 bytes in one go
+                # Ensure we only send the actual character count, not the padded length
                 self._port.write(bytes([len(serial_number)]) + serial_bytes)
             except (serial.SerialException, ValueError) as e:
                 logger.error(f"Exception during serial number setting: {str(e)}")
+                continue
 
             if self._writechecksum():
                 return True
-    
+
         logger.error("Failed to set serial number after multiple attempts")
         return False
 
@@ -2120,25 +2130,33 @@ class Basicmicro:
 
             # Read 36 bytes for the serial number
             serial_bytes = bytearray()
+            read_error = False
             for _ in range(36):
                 val = self._readbyte()
                 if not val[0]:
                     logger.debug("Failed to read serial byte")
+                    read_error = True
                     break
                 serial_bytes.append(val[1])
+
+            if read_error:
+                continue
 
             if len(serial_bytes) == 36:
                 crc = self._readchecksumword()
                 if crc[0] and self._crc & 0xFFFF == crc[1] & 0xFFFF:
-                    # Convert the count of characters into a string
+                    # Use only the number of characters specified by count
+                    # Strip null characters for readability
                     serial_str = serial_bytes[:cnt[1]].decode('ascii').rstrip('\0')
                     return (True, serial_str)
                 else:
                     logger.debug(f"CRC check failed: received=0x{crc[1]:04x}, calculated=0x{self._crc & 0xFFFF:04x}")
     
+            logger.debug(f"Retrying serial number read after attempt {_+1}")
+
         logger.error(f"Failed to read serial number after {self._trystimeout} attempts")
         return (False, '')
-        
+
     def SetConfig(self, address: int, config: int) -> bool:
         """
         Sets the configuration of the controller.
@@ -3146,7 +3164,7 @@ class Basicmicro:
 
     def CANPutPacket(self, address: int, cob_id: int, RTR: int, data: List[int]) -> bool:
         """Sends a CAN packet.
-    
+
         Args:
             address: Controller address (0x80 to 0x87)
             cob_id: CAN object identifier (0 to 2047)
@@ -3165,7 +3183,7 @@ class Basicmicro:
         """
         length = len(data)
         if length > 8:
-            raise ValueError("Data length must be no more than 8")
+            raise ValueError("Data length must be no more than 8 bytes")
 
         # Pad data to 8 bytes with 0s
         padded_data = data.copy()
@@ -3198,13 +3216,17 @@ class Basicmicro:
             - First byte of a valid packet is 0xFF (used for internal validation)
         """
         val = self._read(address, Commands.CANGETPACKET, types=["byte", "word", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte"])
-        if val[0] and val[1] == 0xFF:  # First byte should be 0xFF for a valid packet
-            cob_id = val[2]
-            RTR = val[3]
-            length = val[4]
-            # Extract data bytes (all 8)
-            data = [val[i+5] for i in range(8)]
-            return (True, cob_id, RTR, length, data)
+        if val[0]:
+            # First byte (0xFF) is a validation marker for valid packet
+            if val[1] == 0xFF:
+                cob_id = val[2]
+                RTR = val[3]
+                length = val[4]
+                # Extract data bytes (all 8)
+                data = [val[i+5] for i in range(8)]
+                return (True, cob_id, RTR, length, data)
+            else:
+                logger.debug(f"Invalid packet marker: expected 0xFF, got {val[1]:#x}")
     
         return (False, 0, 0, 0, [])
 
@@ -3318,7 +3340,7 @@ class Basicmicro:
     
         Args:
             address: Controller address (0x80 to 0x87)
-            state: Lock state value:
+            state: State value:
                 - 0x55: Automatic reset (resumes after e-stop condition clears)
                 - 0xAA: Software reset (requires ResetEStop command)
                 - 0: Hardware reset (requires physical reset)
@@ -3330,8 +3352,8 @@ class Basicmicro:
             ValueError: If state value is invalid (not 0x55, 0xAA, or 0)
         """
         if state not in [0x55, 0xAA, 0]:
-            raise ValueError("Invalid state value. Must be 0x55, 0xAA, or 0.")
-        
+            raise ValueError("Invalid state value. Must be 0x55 (auto reset), 0xAA (software reset), or 0 (hardware reset).")
+    
         return self._write(address, Commands.SETESTOPLOCK, state, types=["byte"])
 
     def GetEStopLock(self, address: int) -> EStopLockResult:
@@ -3464,6 +3486,7 @@ class Basicmicro:
             except Exception as e:
                 logger.warning(f"Error flushing input buffer during EEPROM read: {str(e)}")
                 # Continue trying despite the error
+            
             self._sendcommand(address, Commands.READEEPROM)
             self.crc_update(ee_address)
 
@@ -3481,13 +3504,13 @@ class Basicmicro:
             if not val[0]:
                 logger.debug("Failed to read value from EEPROM")
                 continue
-            
+        
             # Validate checksum
             crc = self._readchecksumword()
             if not crc[0]:
                 logger.debug("Failed to read CRC checksum")
                 continue
-            
+        
             # Check if CRC matches
             if self._crc & 0xFFFF == crc[1] & 0xFFFF:
                 return (self.SUCCESS, val[1])

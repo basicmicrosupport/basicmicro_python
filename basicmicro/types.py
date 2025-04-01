@@ -1,5 +1,24 @@
 """
 Type definitions for the Basicmicro package.
+    
+This module defines common return type annotations used throughout the
+Basicmicro package to provide better type hinting for IDEs and static
+type checkers.
+    
+Each type definition represents the return value structure of a corresponding
+method in the Basicmicro class. Most return types include a success flag
+as the first element, followed by method-specific return values.
+    
+Type Variables:
+    SuccessFlag: Boolean indicating success or failure of an operation
+    
+Common Return Types:
+    ReadResult: Simple read operation result with a value
+    EncoderResult: Encoder read result with count and status
+    SpeedResult: Speed read result with speed and status
+    VoltsResult: Voltage read result with main and logic battery values
+    PIDResult: PID parameter read result
+    ...and many more specialized result types
 """
 
 from typing import Tuple, List, Dict, Any, Optional, Union, Callable, TypeVar, Generic

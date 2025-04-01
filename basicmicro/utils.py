@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 def initialize_crc_table(polynomial: int = 0x1021) -> List[int]:
     """Initialize a CRC lookup table for faster CRC calculations.
     
+    Pre-computes a 256-element lookup table based on the provided CRC polynomial
+    to accelerate CRC calculations during serial communications.
+    
     Args:
         polynomial: The CRC polynomial to use (default: 0x1021)
+            Common values: 0x1021 (CCITT), 0x8005 (CRC-16)
         
     Returns:
-        List[int]: The pre-computed CRC table
+        List[int]: The pre-computed CRC table with 256 16-bit values
     """
     table = [0] * 256
     for i in range(256):
@@ -27,16 +31,21 @@ def initialize_crc_table(polynomial: int = 0x1021) -> List[int]:
 
 
 def calc_mixed(fb: int, lr: int) -> Tuple[int, int]:
-    """Utility function for calculating mixed mode values.
+    """Calculate mixed mode drive values for differential steering.
+    
+    This utility function transforms forward/backward and left/right commands
+    into individual motor commands for differential drive systems.
     
     Args:
-        fb: Forward/backward value
-        lr: Left/right value
+        fb: Forward/backward value (-32768 to +32768)
+            Positive = forward, negative = backward
+        lr: Left/right value (-32768 to +32768)
+            Positive = right, negative = left
     
     Returns:
-        Tuple[int, int]: Tuple of mixed mode values (out0, out1)
+        Tuple[int, int]: Tuple of mixed mode values (left_motor, right_motor)
+            Both values will be in the range -32768 to +32768
     """
-    # Calculate mixing
     if (lr ^ fb) < 0:  # Signs are different?
         if abs(lr) > abs(fb):
             out1 = -lr
