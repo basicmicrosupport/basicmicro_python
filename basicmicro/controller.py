@@ -7,11 +7,12 @@ import random
 import serial
 import logging
 from typing import Tuple, List, Dict, Any, Optional, Union, Callable
+from config import DEFAULT_ADDRESS
 
 from basicmicro.commands import Commands
 from basicmicro.utils import initialize_crc_table, calc_mixed
 from basicmicro.types import *
-from basicmicro.exceptions import BasBasicmicroError, CommunicationError, ChecksumError, TimeoutError
+from basicmicro.exceptions import BasicmicroError, CommunicationError, ChecksumError, TimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -171,23 +172,8 @@ class Basicmicro:
             except Exception as e:
                 logger.warning(f"Error while clearing buffers: {str(e)}")
 
-            # Verify communication by reading version with multiple retries
-            for retry in range(self.MAX_RETRY_COUNT):
-                logger.debug(f"Verifying communication attempt {retry+1}/{self.MAX_RETRY_COUNT}")
-                try:
-                    success, version = self.ReadVersion(DEFAULT_ADDRESS)
-                    if success:
-                        logger.info(f"Connection established. Controller version: {version}")
-                        return True
-                except Exception as e:
-                    logger.warning(f"Exception during communication verification (attempt {retry+1}): {str(e)}")
-                time.sleep(0.1)  # Short delay between retries
+            return True
         
-            # If we're here, communication failed
-            logger.error("Failed to verify communication after multiple attempts")
-            self.close()
-            return False
-
         except (serial.SerialException, ValueError) as e:
             logger.error(f"Error opening serial port: {str(e)}")
             self.close()
