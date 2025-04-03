@@ -1,6 +1,6 @@
 # Basicmicro API Reference
 
-This document provides detailed information about the Basicmicro library API.
+This document provides detailed information about the Basicmicro library API for controlling Basicmicro motor controllers.
 
 ## Table of Contents
 
@@ -16,6 +16,10 @@ This document provides detailed information about the Basicmicro library API.
 - [Configuration Functions](#configuration-functions)
 - [CAN Bus Functions](#can-bus-functions)
 - [Advanced Functions](#advanced-functions)
+- [PWM Functions](#pwm-functions)
+- [Digital I/O Functions](#digital-io-functions)
+- [Signaling and Stream Functions](#signaling-and-stream-functions)
+- [Error Handling](#error-handling)
 
 ## Main Controller Class
 
@@ -166,6 +170,7 @@ success = controller.SpeedM1M2(address, 1000, -800)  # Different speeds
 - `SpeedAccelM1(address, accel, speed)`
 - `SpeedAccelM2(address, accel, speed)`
 - `SpeedAccelM1M2(address, accel, speed1, speed2)`
+- `SpeedAccelM1M2_2(address, accel1, speed1, accel2, speed2)` - Different accelerations
 
 Example:
 ```python
@@ -190,6 +195,7 @@ success = controller.SpeedDistanceM1(address, 500, 1000, 0)
 - `SpeedAccelDistanceM1(address, accel, speed, distance, buffer)`
 - `SpeedAccelDistanceM2(address, accel, speed, distance, buffer)`
 - `SpeedAccelDistanceM1M2(address, accel, speed1, distance1, speed2, distance2, buffer)`
+- `SpeedAccelDistanceM1M2_2(address, accel1, speed1, distance1, accel2, speed2, distance2, buffer)` - Different accelerations
 
 ## Position Control
 
@@ -229,6 +235,30 @@ Example:
 success = controller.M1SpeedPosition(address, 1000, 5000, 0)
 ```
 
+### Speed-Accel-Decel-Controlled Position Comamnds
+
+- `SpeedAccelDeccelPositionM1(address, accel, speed, deccel, position, buffer)`
+- `SpeedAccelDeccelPositionM2(address, accel, speed, deccel, position, buffer)`
+- `SpeedAccelDeccelPositionM1M2(address, accel1, speed1, deccel1, position1, accel2, speed2, deccel2, position2, buffer)`
+
+Example:
+```python
+# Move M1 to position 5000 at speed 1000, immediate execution
+success = controller.SpeedAccelDecelPositionM1(address, 1000, 1000, 1000, 5000, 0)
+```
+
+### Percentage Position Commands
+
+- `M1PercentPosition(address, position, buffer)`
+- `M2PercentPosition(address, position, buffer)`
+- `MixedPercentPosition(address, position1, position2, buffer)`
+
+Example:
+```python
+# Move Motor 1 to 50% of its range, immediate execution
+success = controller.M1PercentPosition(address, 16384, 0)  # 50% = 16384
+```
+
 ## PID Configuration
 
 ### Velocity PID
@@ -260,6 +290,22 @@ Example:
 success = controller.SetM1PositionPID(address, 10.0, 0.5, 1.0, 50, 10, -1000000, 1000000)
 ```
 
+### Motor Electrical Properties
+
+- `SetM1LR(address, L, R)` - Set motor 1 inductance/resistance
+- `SetM2LR(address, L, R)` - Set motor 2 inductance/resistance
+- `GetM1LR(address)` - Get motor 1 inductance/resistance
+- `GetM2LR(address)` - Get motor 2 inductance/resistance
+
+Example:
+```python
+# Set motor 1 L/R values
+success = controller.SetM1LR(address, 0.001, 0.5)  # 1mH, 0.5Ω
+
+# Read motor 1 L/R values
+success, L, R = controller.GetM1LR(address)
+```
+
 ## Encoder Functions
 
 ### Reading Encoders
@@ -267,6 +313,13 @@ success = controller.SetM1PositionPID(address, 10.0, 0.5, 1.0, 50, 10, -1000000,
 - `ReadEncM1(address)`: Read motor 1 encoder
 - `ReadEncM2(address)`: Read motor 2 encoder
 - `GetEncoders(address)`: Read both encoders
+- `ReadISpeedM1(address)`: Read instantaneous speed for motor 1
+- `ReadISpeedM2(address)`: Read instantaneous speed for motor 2
+- `GetISpeeds(address)`: Read instantaneous speeds for both motors
+- `ReadSpeedM1(address)`: Read filtered speed for motor 1
+- `ReadSpeedM2(address)`: Read filtered speed for motor 2
+- `GetSpeeds(address)`: Read speeds for both motors
+- `GetEncStatus(address)`: Read encoder error statuses
 
 Example:
 ```python
@@ -282,6 +335,9 @@ success, enc1, enc2 = controller.GetEncoders(address)
 - `ResetEncoders(address)`: Reset both encoders to zero
 - `SetEncM1(address, cnt)`: Set motor 1 encoder value
 - `SetEncM2(address, cnt)`: Set motor 2 encoder value
+- `SetM1EncoderMode(address, mode)`: Set motor 1 encoder mode
+- `SetM2EncoderMode(address, mode)`: Set motor 2 encoder mode
+- `ReadEncoderModes(address)`: Read encoder modes
 
 Example:
 ```python
@@ -296,8 +352,10 @@ success = controller.ResetEncoders(address)
 - `ReadVersion(address)`: Read firmware version
 - `ReadMainBatteryVoltage(address)`: Read main battery voltage
 - `ReadLogicBatteryVoltage(address)`: Read logic battery voltage
+- `GetVolts(address)`: Read both battery voltages
 - `ReadTemp(address)`: Read temperature from sensor 1
 - `ReadTemp2(address)`: Read temperature from sensor 2
+- `GetTemps(address)`: Read both temperature sensors
 - `ReadError(address)`: Read error status
 
 Example:
@@ -319,6 +377,10 @@ temp_celsius = temp / 10.0  # Convert to degrees Celsius
 - `ReadBuffers(address)`: Read command buffer status
 - `GetSpeedErrors(address)`: Read speed error values
 - `GetPosErrors(address)`: Read position error values
+- `GetSpeedErrorLimit(address)`: Read speed error limits
+- `GetPosErrorLimit(address)`: Read position error limits
+- `SetSpeedErrorLimit(address, limit1, limit2)`: Set speed error limits
+- `SetPosErrorLimit(address, limit1, limit2)`: Set position error limits
 
 Example:
 ```python
@@ -327,6 +389,17 @@ success, current1, current2 = controller.ReadCurrents(address)
 
 # Read buffer status
 success, buffer1, buffer2 = controller.ReadBuffers(address)
+```
+
+### Timeout Control
+
+- `SetTimeout(address, timeout)`: Set communication timeout
+- `GetTimeout(address)`: Read communication timeout
+
+Example:
+```python
+# Set timeout to 2 seconds
+success = controller.SetTimeout(address, 2.0)
 ```
 
 ## Configuration Functions
@@ -340,6 +413,8 @@ success, buffer1, buffer2 = controller.ReadBuffers(address)
 - `ReadNVM(address)`: Load settings from non-volatile memory
 - `SetSerialNumber(address, serial_number)`: Set controller serial number
 - `GetSerialNumber(address)`: Read controller serial number
+- `SetNodeID(address, nodeid)`: Set CAN node ID
+- `GetNodeID(address)`: Get CAN node ID
 
 Example:
 ```python
@@ -352,29 +427,48 @@ success = controller.WriteNVM(address)
 
 ### Motor Configuration
 
-- `SetM1EncoderMode(address, mode)`: Set motor 1 encoder mode
-- `SetM2EncoderMode(address, mode)`: Set motor 2 encoder mode
-- `ReadEncoderModes(address)`: Read encoder modes
-- `SetM1DefaultAccel(address, accel)`: Set default acceleration for motor 1
-- `SetM2DefaultAccel(address, accel)`: Set default acceleration for motor 2
+- `SetM1DefaultAccel(address, accel, decel)`: Set default acceleration and deceleration for motor 1
+- `SetM2DefaultAccel(address, accel, decel)`: Set default acceleration and deceleration for motor 2
+- `SetM1DefaultSpeed(address, speed)`: Set default speed for motor 1
+- `SetM2DefaultSpeed(address, speed)`: Set default speed for motor 2
+- `GetDefaultSpeeds(address)`: Read default speeds
 - `GetDefaultAccels(address)`: Read default accelerations
+- `SetM1MaxCurrent(address, maxi, mini)`: Set maximum and minimum current limits for motor 1
+- `SetM2MaxCurrent(address, maxi, mini)`: Set maximum and minimum current limits for motor 2
+- `ReadM1MaxCurrent(address)`: Read maximum and minimum current limits for motor 1
+- `ReadM2MaxCurrent(address)`: Read maximum and minimum current limits for motor 2
 
 Example:
 ```python
-# Set default acceleration for motor 1
-success = controller.SetM1DefaultAccel(address, 500)
+# Set default acceleration and deceleration for motor 1
+success = controller.SetM1DefaultAccel(address, 500, 1000)
 
-# Read encoder modes
-success, mode1, mode2 = controller.ReadEncoderModes(address)
+# Set default speed for motor 1
+success = controller.SetM1DefaultSpeed(address, 1000)
+```
+
+### Voltage Configuration
+
+- `SetMainVoltages(address, min_voltage, max_voltage, auto_offset)`: Set main battery voltage limits
+- `SetLogicVoltages(address, min_voltage, max_voltage)`: Set logic battery voltage limits
+- `ReadMinMaxMainVoltages(address)`: Read main battery voltage limits
+- `ReadMinMaxLogicVoltages(address)`: Read logic battery voltage limits
+- `SetOffsets(address, offset1, offset2)`: Set voltage reading offsets
+- `GetOffsets(address)`: Read voltage reading offsets
+
+Example:
+```python
+# Set main battery voltage limits
+success = controller.SetMainVoltages(address, 100, 140, 0)  # 10.0V to 14.0V
 ```
 
 ## CAN Bus Functions
 
 Functions for CAN bus communication:
 
-- `CANBufferState(address)`: Get the count of available CAN packets
-- `CANPutPacket(address, cob_id, RTR, data)`: Send a CAN packet
-- `CANGetPacket(address)`: Read a CAN packet
+- `CANBufferState(address)`: Get the count of available raw CAN packets
+- `CANPutPacket(address, cob_id, RTR, data)`: Send a raw CAN packet
+- `CANGetPacket(address)`: Read a raw CAN packet
 - `CANOpenWriteLocalDict(address, wIndex, bSubindex, lValue, bSize)`: Write to CANopen dictionary
 - `CANOpenReadLocalDict(address, wIndex, bSubindex)`: Read from CANopen dictionary
 
@@ -402,8 +496,8 @@ Example:
 # Start the script
 success = controller.StartScript(address)
 
-# Get script autorun setting
-success, autorun_time = controller.GetScriptAutoRun(address)
+# Set script to autorun after 500ms
+success = controller.SetScriptAutoRun(address, 500)
 ```
 
 ### Emergency Stop
@@ -416,7 +510,128 @@ Example:
 ```python
 # Reset emergency stop
 success = controller.ResetEStop(address)
+
+# Configure for software reset mode
+success = controller.SetEStopLock(address, controller.ESTOP_SW_RESET)
 ```
+
+## PWM Functions
+
+### PWM Mode Configuration
+
+- `SetPWMMode(address, mode1, mode2)`: Set PWM modes for both motors
+- `ReadPWMMode(address)`: Read PWM modes
+- `SetPWMIdle(address, idledelay1, idlemode1, idledelay2, idlemode2)`: Set PWM idle parameters
+- `GetPWMIdle(address)`: Get PWM idle parameters
+
+Example:
+```python
+# Set PWM idle parameters
+success = controller.SetPWMIdle(address, 5.0, True, 5.0, True)
+```
+
+### Auxiliary PWM Control
+
+- `SetAuxDutys(address, duty1, duty2, duty3, duty4, duty5)`: Set auxiliary PWM duty cycles
+- `GetAuxDutys(address)`: Read auxiliary PWM duty cycles
+
+Example:
+```python
+# Set auxiliary PWM duty cycles
+success = controller.SetAuxDutys(address, 8192, -8192, 16384, 0, 0)
+```
+
+## Digital I/O Functions
+
+### Digital Output Control
+
+- `SetDOUT(address, index, action)`: Set digital output
+- `GetDOUTS(address)`: Get digital outputs status
+
+Example:
+```python
+# Set digital output
+success = controller.SetDOUT(address, 0, 1)  # Set output 0 to ON
+
+# Read all digital outputs
+success, count, actions = controller.GetDOUTS(address)
+```
+
+### Pin Configuration
+
+- `SetPinFunctions(address, S3mode, S4mode, S5mode)`: Set functions of pins S3, S4, and S5
+- `ReadPinFunctions(address)`: Read functions of pins
+
+Example:
+```python
+# Set pin functions
+success = controller.SetPinFunctions(address, 1, 2, 3)
+```
+
+## Signaling and Stream Functions
+
+### Signal Configuration
+
+- `SetSignal(address, index, signal_type, mode, target, min_action, max_action, lowpass, timeout, loadhome, min_val, max_val, center, deadband, powerexp, minout, maxout, powermin, potentiometer)`: Configure signal parameters
+- `GetSignals(address)`: Get configured signals
+- `GetSignalsData(address)`: Get signal data
+
+Example:
+```python
+# Get all configured signals
+success, count, signals = controller.GetSignals(address)
+```
+
+### Stream Configuration
+
+- `SetStream(address, index, stream_type, baudrate, timeout)`: Configure stream parameters
+- `GetStreams(address)`: Get stream configurations
+
+Example:
+```python
+# Configure a UART stream (type 1) at 9600 baud
+success = controller.SetStream(address, 0, 1, 9600, 1000)
+```
+
+### Miscellaneous Configuration
+
+- `SetAddressMixed(address, new_address, enable_mixing)`: Set mixed address and enable/disable mixing
+- `GetAddressMixed(address)`: Get mixed address and mixing state
+- `SetPriority(address, priority1, priority2, priority3)`: Set priority levels
+- `GetPriority(address)`: Get priority levels
+
+## Error Handling
+
+The library includes custom exceptions for error handling:
+
+- `BasicmicroError`: Base exception for all Basicmicro-related errors
+- `CommunicationError`: Exception for communication errors
+- `CommandError`: Exception for invalid commands
+- `ResponseError`: Exception for invalid responses
+- `ChecksumError`: Exception for checksum errors
+- `TimeoutError`: Exception for timeout errors
+
+Example:
+```python
+from basicmicro.exceptions import BasicmicroError, CommunicationError
+
+try:
+    controller.Open()
+    # ... operations ...
+except CommunicationError as e:
+    print(f"Communication error: {e}")
+except BasicmicroError as e:
+    print(f"Controller error: {e}")
+finally:
+    controller.close()
+```
+
+## Utility Functions
+
+The package includes utility functions in the `utils` module:
+
+- `initialize_crc_table(polynomial)`: Initialize a CRC lookup table
+- `calc_mixed(fb, lr)`: Calculate mixed mode drive values for differential steering
 
 ---
 
