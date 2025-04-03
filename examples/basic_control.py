@@ -47,7 +47,7 @@ def main():
         # Read battery voltage
         voltage_result = controller.ReadMainBatteryVoltage(args.address)
         if voltage_result[0]:
-            logger.info(f"Main battery voltage: {voltage_result[1]/VOLTAGE_SCALE}V")
+            logger.info(f"Main battery voltage: {voltage_result[1]/self.VOLTAGE_SCALE}V")
         
         # Run a simple motor control sequence
         try:

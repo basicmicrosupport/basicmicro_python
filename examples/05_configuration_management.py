@@ -100,11 +100,11 @@ def main():
             estop_lock = controller.GetEStopLock(args.address)
             if estop_lock[0]:
                 lock_state = "Unknown"
-                if estop_lock[1] == ESTOP_HW_RESET:
+                if estop_lock[1] == self.ESTOP_HW_RESET:
                     lock_state = "Hardware reset required"
-                elif estop_lock[1] == ESTOP_AUTO_RESET:
+                elif estop_lock[1] == self.ESTOP_AUTO_RESET:
                     lock_state = "Automatic reset"
-                elif estop_lock[1] == ESTOP_SW_RESET:
+                elif estop_lock[1] == self.ESTOP_SW_RESET:
                     lock_state = "Software reset enabled"
                     
                 logger.info(f"E-Stop Lock State: 0x{estop_lock[1]:02X} ({lock_state})")
