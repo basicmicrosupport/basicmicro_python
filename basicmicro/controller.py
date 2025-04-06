@@ -1829,7 +1829,7 @@ class Basicmicro:
         """
         return self._read(address, Commands.GETSTATUS, types=["long", "long", "word", "word", "word", "word", "word", "word", "word", "word", "long", "long", "long", "long", "long", "long", "word", "word", "word", "word"])
 
-    def SetPinFunctions(self, address: int, S3mode: int, S4mode: int, S5mode: int) -> bool:
+    def SetPinFunctions(self, address: int, S3mode: int, S4mode: int, S5mode: int, D1mode: int, D2mode: int) -> bool:
         """
         Sets the functions of pins S3, S4, and S5.
 
@@ -1838,11 +1838,13 @@ class Basicmicro:
             S3mode: The mode to set for pin S3.
             S4mode: The mode to set for pin S4.
             S5mode: The mode to set for pin S5.
+            D1mode: The mode to set for pin CTRL1.
+            D2mode: The mode to set for pin CTRL2.
 
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETPINFUNCTIONS, S3mode, S4mode, S5mode, types=["byte", "byte", "byte"])
+        return self._write(address, Commands.SETPINFUNCTIONS, S3mode, S4mode, S5mode, D1mode, D2mode, types=["byte", "byte", "byte", "byte", "byte"])
 
     def ReadPinFunctions(self, address: int) -> PinFunctionsResult:
         """
@@ -1857,24 +1859,52 @@ class Basicmicro:
                 S3mode: The mode of pin S3.
                 S4mode: The mode of pin S4.
                 S5mode: The mode of pin S5.
+                D1mode: The mode of pin CTRL1.
+                D2mode: The mode of pin CTRL2.
         """
-        return self._read(address, Commands.GETPINFUNCTIONS, types=["byte", "byte", "byte"])
+        return self._read(address, Commands.GETPINFUNCTIONS, types=["byte", "byte", "byte", "byte", "byte"])
 
-    def SetDeadBand(self, address: int, min_value: int, max_value: int) -> bool:
+    def SetCtrlSettings(self, address: int, S1revdeadband: int, S1fwddeadband: int, S1revlimit: int, S1fwdlimit: int, S1rangecenter: int, S1rangemin: int, S1rangemax: int, S2revdeadband: int, S2fwddeadband: int, S2revlimit: int, S2fwdlimit: int, S2rangecenter: int, S2rangemin: int, S2rangemax: int) -> bool:
         """
         Sets the deadband values.
 
         Args:
             address: The address of the controller.
-            min_value: The minimum deadband value.
-            max_value: The maximum deadband value.
+            S1revdeadband: Reverse deadband value (0-255)
+            S1fwddeadband: Forward deadband value (0-255)
+            S1revlimit: Reverse Limit value, RC:0-3000,Analog(0-2047) 
+            S1fwdlimit: Forward Limit value, RC:0-3000,Analog(0-2047) 
+            S1rangecenter: Input Center
+            S1rangemin: Input Minimum
+            S1rangemax: Input Maximum
+            S2revdeadband: Reverse deadband value (0-255)
+            S2fwddeadband: Forward deadband value (0-255)
+            S2revlimit: Reverse Limit value, RC:0-3000,Analog(0-2047) 
+            S2fwdlimit: Forward Limit value, RC:0-3000,Analog(0-2047) 
+            S2rangecenter: Input Center
+            S2rangemin: Input Minimum
+            S2rangemax: Input Maximum
 
         Returns:
             bool: True if successful.
         """
-        return self._write(address, Commands.SETDEADBAND, min_value, max_value, types=["byte", "byte"])
+        return self._write(address, Commands.SETCTRLSETTINGS, S1revdeadband,
+                                                              S1fwddeadband,
+                                                              S1revlimit,
+                                                              S1fwdlimit, 
+                                                              S1rangecenter,
+                                                              S1rangemin,
+                                                              S1rangemax,
+                                                              S2revdeadband,
+                                                              S2fwddeadband,
+                                                              S2revlimit,
+                                                              S2fwdlimit,
+                                                              S2rangecenter,
+                                                              S2rangemin,
+                                                              S2rangemax,
+                                                              types=["byte", "byte", "word", "word", "word", "word", "word", "byte", "byte", "word", "word", "word", "word", "word"])
 
-    def GetDeadBand(self, address: int) -> DeadBandResult:
+    def GetCtrlSettings(self, address: int) -> DeadBandResult:
         """
         Reads the deadband values.
 
@@ -1884,10 +1914,22 @@ class Basicmicro:
         Returns:
             DeadBandResult: (success, min, max)
                 success: True if read successful.
-                min: The minimum deadband value.
-                max: The maximum deadband value.
+                S1revdeadband: Reverse deadband value (0-255)
+                S1fwddeadband: Forward deadband value (0-255)
+                S1revlimit: Reverse Limit value, RC:0-3000,Analog(0-2047) 
+                S1fwdlimit: Forward Limit value, RC:0-3000,Analog(0-2047) 
+                S1rangecenter: Input Center
+                S1rangemin: Input Minimum
+                S1rangemax: Input Maximum
+                S2revdeadband: Reverse deadband value (0-255)
+                S2fwddeadband: Forward deadband value (0-255)
+                S2revlimit: Reverse Limit value, RC:0-3000,Analog(0-2047) 
+                S2fwdlimit: Forward Limit value, RC:0-3000,Analog(0-2047) 
+                S2rangecenter: Input Center
+                S2rangemin: Input Minimum
+                S2rangemax: Input Maximum
         """
-        return self._read(address, Commands.GETDEADBAND, types=["byte", "byte"])
+        return self._read(address, Commands.GETCTRLSETTINGS, types=["byte", "byte", "word", "word", "word", "word", "word", "byte", "byte", "word", "word", "word", "word", "word"])
 
     def GetEncoders(self, address: int) -> EncodersResult:
         """
@@ -1942,9 +1984,9 @@ class Basicmicro:
             AccelsResult: (success, accel1, accel2, accel3, accel4)
                 success: True if read successful.
                 accel1: The default acceleration for motor 1.
+                decel1: The default deceleration for motor 1.
                 accel2: The default acceleration for motor 2.
-                accel3: The default acceleration for motor 3.
-                accel4: The default acceleration for motor 4.
+                decel2: The default deceleration for motor 2.
         """
         return self._read(address, Commands.GETDEFAULTACCELS, types=["long", "long", "long", "long"])
 
@@ -2293,7 +2335,7 @@ class Basicmicro:
         """
         return self._read(address, Commands.GETSPEEDERRORS, types=["word", "word"])
 
-    def M1Position(self, address: int, position: int, buffer: int) -> bool:
+    def PositionM1(self, address: int, position: int, buffer: int) -> bool:
         """Commands motor 1 to absolute position.
             
         Args:
@@ -2306,7 +2348,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M1POS, position, buffer, types=["long", "byte"])
 
-    def M2Position(self, address: int, position: int, buffer: int) -> bool:
+    def PositionM2(self, address: int, position: int, buffer: int) -> bool:
         """Commands motor 2 to absolute position.
             
         Args:
@@ -2319,7 +2361,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M2POS, position, buffer, types=["long", "byte"])
 
-    def MixedPosition(self, address: int, position1: int, position2: int, buffer: int) -> bool:
+    def PositionM1M2(self, address: int, position1: int, position2: int, buffer: int) -> bool:
         """Commands both motors to positions simultaneously.
             
         Args:
@@ -2333,7 +2375,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.MIXEDPOS, position1, position2, buffer, types=["long", "long", "byte"])
 
-    def M1SpeedPosition(self, address: int, speed: int, position: int, buffer: int) -> bool:
+    def SpeedPositionM1(self, address: int, speed: int, position: int, buffer: int) -> bool:
         """Commands motor 1 position with speed.
     
         Args:
@@ -2347,7 +2389,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M1SPEEDPOS, speed, position, buffer, types=["long", "long", "byte"])
 
-    def M2SpeedPosition(self, address: int, speed: int, position: int, buffer: int) -> bool:
+    def SpeedPositionM2(self, address: int, speed: int, position: int, buffer: int) -> bool:
         """Commands motor 2 position with speed.
     
         Args:
@@ -2361,7 +2403,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M2SPEEDPOS, speed, position, buffer, types=["long", "long", "byte"])
 
-    def MixedSpeedPosition(self, address: int, speed1: int, position1: int, speed2: int, position2: int, buffer: int) -> bool:
+    def SpeedPositionM1M2(self, address: int, speed1: int, position1: int, speed2: int, position2: int, buffer: int) -> bool:
         """Commands both motors with speed and position.
     
         Args:
@@ -2377,7 +2419,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.MIXEDSPEEDPOS, speed1, position1, speed2, position2, buffer, types=["long", "long", "long", "long", "byte"])
 
-    def M1PercentPosition(self, address: int, position: int, buffer: int) -> bool:
+    def PercentPositionM1(self, address: int, position: int, buffer: int) -> bool:
         """Commands motor 1 to a percent position.
     
         Args:
@@ -2390,7 +2432,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M1PPOS, position, buffer, types=["sword", "byte"])
 
-    def M2PercentPosition(self, address: int, position: int, buffer: int) -> bool:
+    def PercentPositionM2(self, address: int, position: int, buffer: int) -> bool:
         """Commands motor 2 to a percent position.
     
         Args:
@@ -2403,7 +2445,7 @@ class Basicmicro:
         """
         return self._write(address, Commands.M2PPOS, position, buffer, types=["sword", "byte"])
 
-    def MixedPercentPosition(self, address: int, position1: int, position2: int, buffer: int) -> bool:
+    def PercentPositionM1M2(self, address: int, position1: int, position2: int, buffer: int) -> bool:
         """Commands both motors to percent positions.
     
         Args:
@@ -2459,12 +2501,12 @@ class Basicmicro:
         return self._read(address, Commands.GETPOSERRORS, types=["word", "word"])
 
     def SetOffsets(self, address: int, offset1: int, offset2: int) -> bool:
-        """Sets encoder offsets.
+        """Sets voltage offsets.
     
         Args:
             address: Controller address (0x80 to 0x87)
-            offset1: Motor 1 encoder offset (0 to 255)
-            offset2: Motor 2 encoder offset (0 to 255)
+            offset1: MBat voltage offset (0 to 255)
+            offset2: LBat voltage offset (0 to 255)
         
         Returns:
             bool: True if successful
@@ -2472,7 +2514,7 @@ class Basicmicro:
         return self._write(address, Commands.SETOFFSETS, offset1, offset2, types=["byte", "byte"])
 
     def GetOffsets(self, address: int) -> OffsetsResult:
-        """Reads encoder offsets.
+        """Reads voltage offsets.
     
         Args:
             address: Controller address (0x80 to 0x87)
@@ -2480,8 +2522,8 @@ class Basicmicro:
         Returns:
             OffsetsResult: (success, offset1, offset2)
                 success: True if read successful
-                offset1: Motor 1 encoder offset
-                offset2: Motor 2 encoder offset
+                offset1: MBat voltage offset
+                offset2: LBat voltage offset
         """
         results = self._read(address, Commands.GETOFFSETS, types=["byte", "byte"])
         mbatoffset = struct.unpack('b', struct.pack('B', results[1]))[0]
