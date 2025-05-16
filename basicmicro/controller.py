@@ -12,7 +12,7 @@ from typing import Tuple, List, Dict, Any, Optional, Union, Callable
 from basicmicro.commands import Commands
 from basicmicro.utils import initialize_crc_table, calc_mixed
 from basicmicro.types import *
-from basicmicro.exceptions import BasicmicroError, CommunicationError, ChecksumError, TimeoutError
+from basicmicro.exceptions import PacketTimeoutError, CommunicationError
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,8 @@ class Basicmicro:
         self._crc = 0
         self._port = None  # Initialize as None to handle property access before open
 
+        self._connected = False
+
         # Pre-compute CRC table for faster CRC calculations
         self._CRC_TABLE = initialize_crc_table(self.CRC_POLYNOMIAL)
 
@@ -172,6 +174,7 @@ class Basicmicro:
             except Exception as e:
                 logger.warning(f"Error while clearing buffers: {str(e)}")
 
+            self._connected = True
             return True
         
         except (serial.SerialException, ValueError) as e:
@@ -183,16 +186,48 @@ class Basicmicro:
             self.close()
             return False
 
+    def reconnect(self) -> bool:
+        """Attempts to close and reopen the serial connection.
+        
+        Returns:
+            bool: True if reconnection successful, False otherwise
+        """
+        logger.info(f"Attempting to reconnect to {self.comport}")
+        self.close()
+        return self.Open()
+    
     def close(self) -> None:
-        """Closes the serial connection to the controller."""
+        """Closes the serial connection to the controller with improved cleanup."""
         logger.info(f"Closing connection to {self.comport}")
-        if hasattr(self, '_port') and self._port is not None:
-            try:
-                if self._port.is_open:
-                    self._port.close()
-            except Exception as e:
-                logger.error(f"Error closing serial port: {str(e)}")
-                
+        try:
+            if hasattr(self, '_port') and self._port is not None:
+                try:
+                    if self._port.is_open:
+                        self._port.close()
+                        logger.debug("Serial port successfully closed")
+                except Exception as e:
+                    logger.error(f"Error closing serial port: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error during port cleanup: {str(e)}")
+        finally:
+            self._port = None
+            self._connected = False
+        
+    def _is_port_ready(self) -> bool:
+        """Checks if port exists and is open without raising exceptions.
+        Returns True if the port is ready for operations.
+        """
+        return hasattr(self, '_port') and self._port is not None and self._port.is_open
+    
+    @property
+    def is_connected(self) -> bool:
+        """Returns the current connection status.
+        
+        Returns:
+            bool: True if connected and port is ready
+        """
+        return self._connected and self._is_port_ready()
+        
 # CRC and core communication methods
     def crc_clear(self) -> None:
         """Clears the CRC value."""
@@ -217,6 +252,10 @@ class Basicmicro:
         Raises:
             CommunicationError: If sending the command fails due to serial port issues
         """
+        if not self.is_connected:
+            logger.error("Cannot send command: port not ready")
+            raise CommunicationError("Serial port not open or not initialized")
+        
         logger.debug(f"Sending command: address=0x{address:02x}, command=0x{command:02x}")
         self.crc_clear()
         data = [address, command]
@@ -236,6 +275,10 @@ class Basicmicro:
                 success: True if read successful
                 value: The byte value
         """
+        if not self.is_connected:
+            logger.debug("Cannot read byte: port not ready")
+            return (False, 0)
+        
         try:
             data = bytearray(self._port.read(1))
             if len(data) == 1:
@@ -255,6 +298,10 @@ class Basicmicro:
                 success: True if read successful
                 value: The word value
         """
+        if not self.is_connected:
+            logger.debug("Cannot read word: port not ready")
+            return (False, 0)
+        
         try:
             data = bytearray(self._port.read(2))
             if len(data) == 2:
@@ -274,6 +321,10 @@ class Basicmicro:
                 success: True if read successful
                 value: The long value
         """
+        if not self.is_connected:
+            logger.debug("Cannot read long: port not ready")
+            return (False, 0)
+        
         try:
             data = bytearray(self._port.read(4))
             if len(data) == 4:
@@ -311,6 +362,10 @@ class Basicmicro:
         Raises:
             CommunicationError: If writing the byte fails
         """
+        if not self.is_connected:
+            logger.debug("Cannot write byte: port not ready")
+            raise CommunicationError("Serial port not connected")
+        
         data = bytearray([val & 0xFF])
         self.crc_update(data[0])
         try:
@@ -336,6 +391,10 @@ class Basicmicro:
         Raises:
             CommunicationError: If writing the word fails
         """
+        if not self.is_connected:
+            logger.debug("Cannot write word: port not ready")
+            raise CommunicationError("Serial port not connected")
+        
         data = bytearray([(val >> 8) & 0xFF, val & 0xFF])
         self.crc_update(data[0])
         self.crc_update(data[1])
@@ -362,6 +421,10 @@ class Basicmicro:
         Raises:
             CommunicationError: If writing the long fails
         """
+        if not self.is_connected:
+            logger.debug("Cannot write long: port not ready")
+            raise CommunicationError("Serial port not connected")
+        
         data = bytearray([(val >> 24) & 0xFF, (val >> 16) & 0xFF, (val >> 8) & 0xFF, val & 0xFF])
         self.crc_update(data[0])
         self.crc_update(data[1])
@@ -406,6 +469,10 @@ class Basicmicro:
             ValueError: If number of type specifications doesn't match number of arguments
             ValueError: If an unsupported type is specified
         """
+        if not self.is_connected:
+            logger.error("Cannot perform write operation: not connected")
+            return False
+        
         logger.debug(f"Write: address=0x{address:02x}, cmd=0x{cmd:02x}, args={args}")
         # Determine the types of arguments
         arg_types = kwargs.get('types', ['byte'] * len(args))
@@ -416,33 +483,45 @@ class Basicmicro:
             raise ValueError(f"Number of type specifications ({len(arg_types)}) must match number of arguments ({len(args)})")
 
         # Start retry loop
-        for _ in range(self._trystimeout):
-            # Send command (address and command)
-            self._sendcommand(address, cmd)
+        for attempt in range(self._trystimeout):
+            try:
+                # Send command (address and command)
+                self._sendcommand(address, cmd)
 
-            # Write each argument according to its type
-            for arg, arg_type in zip(args, arg_types):
-                arg_type = arg_type.lower()
-                if arg_type == 'byte':
-                    self._writebyte(arg)
-                elif arg_type == 'sbyte':
-                    self._writesbyte(arg)
-                elif arg_type == 'word':
-                    self._writeword(arg)
-                elif arg_type == 'sword':
-                    self._writesword(arg)
-                elif arg_type == 'long':
-                    self._writelong(arg)
-                elif arg_type == 'slong':
-                    self._writeslong(arg)
-                else:
-                    raise ValueError(f"Unsupported type: {arg_type}")
+                # Write each argument according to its type
+                for arg, arg_type in zip(args, arg_types):
+                    arg_type = arg_type.lower()
+                    if arg_type == 'byte':
+                        self._writebyte(arg)
+                    elif arg_type == 'sbyte':
+                        self._writesbyte(arg)
+                    elif arg_type == 'word':
+                        self._writeword(arg)
+                    elif arg_type == 'sword':
+                        self._writesword(arg)
+                    elif arg_type == 'long':
+                        self._writelong(arg)
+                    elif arg_type == 'slong':
+                        self._writeslong(arg)
+                    else:
+                        raise ValueError(f"Unsupported type: {arg_type}")
 
-            # Write checksum and verify we received acknowledgment
-            if self._writechecksum():
-                return True
+                # Write checksum and verify we received acknowledgment
+                if self._writechecksum():
+                    return True
+                    
+                logger.debug(f"Attempt {attempt+1}/{self._trystimeout} failed for cmd 0x{cmd:02x}")
+                
+            except serial.SerialTimeoutException as e:
+                logger.debug(f"Serial timeout on attempt {attempt+1}: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Error on write attempt {attempt+1}: {str(e)}")
 
         logger.warning(f"Write failed after {self._trystimeout} attempts: address=0x{address:02x}, cmd=0x{cmd:02x}")
+
+        # Raise timeout exception after all retries are exhausted
+        raise PacketTimeoutError(f"Timeout writing to address 0x{address:02x}, cmd 0x{cmd:02x} after {self._trystimeout} attempts")
+        
         return False
 
     def _writechecksum(self) -> bool:
@@ -483,6 +562,10 @@ class Basicmicro:
         Raises:
             ValueError: If an unsupported type is specified
         """
+        if not self.is_connected:
+            logger.error("Cannot perform read operation: not connected")
+            return tuple([self.FAILURE] + [0] * len(kwargs.get('types', [])))
+        
         logger.debug(f"Read: address=0x{address:02x}, cmd=0x{cmd:02x}")
         retry_on_error = kwargs.get('retry_on_error', True)
         arg_types = kwargs.get('types', [])
@@ -531,6 +614,11 @@ class Basicmicro:
             trys -= 1
 
         logger.warning(f"Read failed after {self._trystimeout} attempts: address=0x{address:02x}, cmd=0x{cmd:02x}")
+        
+        if retry_on_error:
+            # Only raise the timeout exception if retries were enabled and all failed
+            raise PacketTimeoutError(f"Timeout reading from address 0x{address:02x}, cmd 0x{cmd:02x} after {self._trystimeout} attempts")
+            
         return tuple([self.FAILURE] + [0] * len(arg_types))
 
     def _readchecksumword(self) -> Tuple[bool, int]:
@@ -635,6 +723,10 @@ class Basicmicro:
         Args:
             cnt: The number of random bytes to send
         """
+        if not self.is_connected:
+            logger.error("Cannot send random data: not connected")
+            return
+
         try:
             for _ in range(0, cnt):
                 byte = random.getrandbits(8)
@@ -3218,7 +3310,7 @@ class Basicmicro:
             return (True, idledelay1, idlemode1, idledelay2, idlemode2)    
         return (False, 0, False, 0, False)
         
-    def CANBufferState(self, address: int) -> CANBufferResult:
+    def CANGetESR(self, address: int) -> CANBufferResult:
         """Gets the count of available CAN packets.
     
         Args:
@@ -3229,7 +3321,7 @@ class Basicmicro:
                 success: True if read successful
                 count: Number of available CAN packets
         """
-        return self._read(address, Commands.CANBUFFERSTATE, types=["byte"])
+        return self._read(address, Commands.CANGETESR, types=["long"])
 
     def CANPutPacket(self, address: int, cob_id: int, RTR: int, data: List[int]) -> bool:
         """Sends a CAN packet.
@@ -3299,11 +3391,12 @@ class Basicmicro:
     
         return (False, 0, 0, 0, [])
 
-    def CANOpenWriteLocalDict(self, address: int, wIndex: int, bSubindex: int, lValue: int, bSize: int) -> Tuple[bool, int]:
+    def CANOpenWriteLocalDict(self, address: int, bNodeID: int, wIndex: int, bSubindex: int, lValue: int, bSize: int) -> Tuple[bool, int]:
         """Writes to the local CANopen dictionary.
 
         Args:
             address: Controller address (0x80 to 0x87)
+            bNodeID: Node number of CANOpen device to be accessed(0 for local dictionary)
             wIndex: Index in the dictionary (16-bit)
             bSubindex: Subindex in the dictionary (8-bit)
             lValue: Value to write (32-bit)
@@ -3317,7 +3410,8 @@ class Basicmicro:
         logger.debug(f"Writing to CANopen dictionary at address=0x{address:02x}, index=0x{wIndex:04x}, subindex=0x{bSubindex:02x}, value={lValue}, size={bSize}")
 
         for _ in range(self._trystimeout):
-            self._sendcommand(address, Commands.CANOPENWRITELOCALDICT)
+            self._sendcommand(address, Commands.CANOPENWRITEDICT)
+            self._writebyte(bNodeID)
             self._writeword(wIndex)
             self._writebyte(bSubindex)
             self._writelong(lValue)
@@ -3340,11 +3434,12 @@ class Basicmicro:
         logger.error(f"Failed to write to CANopen dictionary at address=0x{address:02x}, index=0x{wIndex:04x}, subindex=0x{bSubindex:02x} after {self._trystimeout} attempts")
         return (False, 0)
 
-    def CANOpenReadLocalDict(self, address: int, wIndex: int, bSubindex: int) -> CANOpenResult:
+    def CANOpenReadLocalDict(self, address: int, bNodeID: int, wIndex: int, bSubindex: int) -> CANOpenResult:
         """Reads from the local CANopen dictionary.
     
         Args:
             address: Controller address (0x80 to 0x87)
+            bNodeID: Node number of CANOpen device to be accessed(0 for local dictionary)
             wIndex: Index in the dictionary (16-bit)
             bSubindex: Subindex in the dictionary (8-bit)
     
@@ -3359,7 +3454,8 @@ class Basicmicro:
         logger.debug(f"Reading from CANopen dictionary at address=0x{address:02x}, index=0x{wIndex:04x}, subindex=0x{bSubindex:02x}")
 
         for _ in range(self._trystimeout):
-            self._sendcommand(address, Commands.CANOPENREADLOCALDICT)
+            self._sendcommand(address, Commands.CANOPENREADDICT)
+            self._writebyte(bNodeID)
             self._writeword(wIndex)
             self._writebyte(bSubindex)
         

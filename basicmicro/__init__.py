@@ -15,5 +15,5 @@ Modules:
 from basicmicro.controller import Basicmicro
 from basicmicro.commands import Commands
 
-__version__ = "2.0.3"
+__version__ = "2.0.6"
 __all__ = ["Basicmicro", "Commands"]

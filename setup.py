@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="basicmicro",
-    version="2.0.3",  # Updated to match __init__.py version
+    version="2.0.6",  # Updated to match __init__.py version
     author="Nathan Scherdin",
     author_email="support@basicmicro.com",
     description="A modernized Python 3 library for controlling Basicmicro motor controllers",
@@ -20,6 +20,9 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Development Status :: 5 - Production/Stable",
