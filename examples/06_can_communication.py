@@ -42,164 +42,145 @@ def main():
                 logger.error("Failed to read firmware version!")
                 return
             
-            # 1. Check CAN Buffer State
-            logger.info("\n=== CHECKING CAN BUFFER STATE ===")
+            # 2. Sending CAN Packets
+            logger.info("\n=== SENDING CAN PACKETS ===")
             
-            buffer_state = controller.CANBufferState(args.address)
-            if buffer_state[0]:
-                logger.info(f"CAN buffer has {buffer_state[1]} packets available")
+            # Example: Send a simple packet
+            # Parameters:
+            # - CAN ID (11-bit standard ID)
+            # - RTR flag (Remote Transmission Request)
+            # - Data bytes (up to 8 bytes)
+            can_id = 0x123
+            rtr = 0  # 0 = normal packet, 1 = remote request
+            data = [0x01, 0x02, 0x03, 0x04]  # Example data payload
+            
+            logger.info(f"Sending CAN packet - ID: 0x{can_id:03X}, Data: {data}")
+            result = controller.CANPutPacket(args.address, can_id, rtr, data)
+            
+            if result:
+                logger.info("CAN packet sent successfully")
             else:
-                logger.error("Failed to read CAN buffer state")
-                # Note: Some controllers might not support CAN or might need special configuration
-                logger.warning("This controller may not support CAN bus operations")
-                logger.warning("If CAN is supported, make sure CAN bus is properly configured")
+                logger.error("Failed to send CAN packet")
+            
+            # Example: Send a Remote Transmission Request (RTR) packet
+            # An RTR packet requests data from another node
+            can_id = 0x321
+            rtr = 1  # RTR flag
+            data = []  # Empty data for RTR
+            
+            logger.info(f"Sending RTR packet - ID: 0x{can_id:03X}")
+            result = controller.CANPutPacket(args.address, can_id, rtr, data)
+            
+            if result:
+                logger.info("RTR packet sent successfully")
+            else:
+                logger.error("Failed to send RTR packet")
+            
+            # 3. Receiving CAN Packets
+            logger.info("\n=== RECEIVING CAN PACKETS ===")
+            
+            # Read all available packets
+            while True:
+                packet = controller.CANGetPacket(args.address)
                 
-            # Continue only if buffer state read was successful
-            if buffer_state[0]:
-                # 2. Sending CAN Packets
-                logger.info("\n=== SENDING CAN PACKETS ===")
-                
-                # Example: Send a simple packet
-                # Parameters:
-                # - CAN ID (11-bit standard ID)
-                # - RTR flag (Remote Transmission Request)
-                # - Data bytes (up to 8 bytes)
-                can_id = 0x123
-                rtr = 0  # 0 = normal packet, 1 = remote request
-                data = [0x01, 0x02, 0x03, 0x04]  # Example data payload
-                
-                logger.info(f"Sending CAN packet - ID: 0x{can_id:03X}, Data: {data}")
-                result = controller.CANPutPacket(args.address, can_id, rtr, data)
-                
-                if result:
-                    logger.info("CAN packet sent successfully")
-                else:
-                    logger.error("Failed to send CAN packet")
-                
-                # Example: Send a Remote Transmission Request (RTR) packet
-                # An RTR packet requests data from another node
-                can_id = 0x321
-                rtr = 1  # RTR flag
-                data = []  # Empty data for RTR
-                
-                logger.info(f"Sending RTR packet - ID: 0x{can_id:03X}")
-                result = controller.CANPutPacket(args.address, can_id, rtr, data)
-                
-                if result:
-                    logger.info("RTR packet sent successfully")
-                else:
-                    logger.error("Failed to send RTR packet")
-                
-                # 3. Receiving CAN Packets
-                logger.info("\n=== RECEIVING CAN PACKETS ===")
-                
-                # Check if any packets are available
-                buffer_state = controller.CANBufferState(args.address)
-                if buffer_state[0] and buffer_state[1] > 0:
-                    logger.info(f"Reading {buffer_state[1]} packets from CAN buffer")
-                    
-                    # Read all available packets
-                    for i in range(buffer_state[1]):
-                        packet = controller.CANGetPacket(args.address)
+                if packet[0]:
+                    if packet[1]:
+                        can_id = packet[2]
+                        rtr = packet[3]
+                        length = packet[4]
+                        data = packet[5][:length]  # Only include valid data bytes
                         
-                        if packet[0]:
-                            can_id = packet[1]
-                            rtr = packet[2]
-                            length = packet[3]
-                            data = packet[4][:length]  # Only include valid data bytes
-                            
-                            # Format data bytes as hex
-                            data_hex = " ".join([f"0x{b:02X}" for b in data])
-                            
-                            logger.info(f"Received packet {i+1}:")
-                            logger.info(f"  ID: 0x{can_id:03X}")
-                            logger.info(f"  RTR: {rtr}")
-                            logger.info(f"  Length: {length}")
-                            logger.info(f"  Data: {data_hex}")
-                        else:
-                            logger.error(f"Failed to read packet {i+1}")
+                        # Format data bytes as hex
+                        data_hex = " ".join([f"0x{b:02X}" for b in data])
+                        
+                        logger.info(f"Received packet {i+1}:")
+                        logger.info(f"  ID: 0x{can_id:03X}")
+                        logger.info(f"  RTR: {rtr}")
+                        logger.info(f"  Length: {length}")
+                        logger.info(f"  Data: {data_hex}")
+                    else:   
+                        logger.info(f"No more CAN packets available")
+                        break
                 else:
-                    logger.info("No CAN packets in buffer to read")
+                    logger.error(f"Failed to read packet {i+1}")
+            
+            # Optional: Wait for incoming packets (timeout after 5 seconds)
+            logger.info("\n=== WAITING FOR INCOMING CAN PACKETS ===")
+            logger.info("Listening for incoming CAN packets for 5 seconds...")
+            
+            start_time = time.time()
+            packet_count = 0
+
+            # Read all available packets
+            while True:
+                packet = controller.CANGetPacket(args.address)
                 
-                # Optional: Wait for incoming packets (timeout after 5 seconds)
-                logger.info("\n=== WAITING FOR INCOMING CAN PACKETS ===")
-                logger.info("Listening for incoming CAN packets for 5 seconds...")
+                if packet[0]:
+                    if packet[1]:
+                        can_id = packet[2]
+                        rtr = packet[3]
+                        length = packet[4]
+                        data = packet[5][:length]
+                        
+                        # Format data bytes as hex
+                        data_hex = " ".join([f"0x{b:02X}" for b in data])
+                        
+                        logger.info(f"Received packet:")
+                        logger.info(f"  ID: 0x{can_id:03X}")
+                        logger.info(f"  RTR: {rtr}")
+                        logger.info(f"  Length: {length}")
+                        logger.info(f"  Data: {data_hex}")
+                        
+                        packet_count += 1
                 
-                start_time = time.time()
-                packet_count = 0
+                # Wait a bit before checking again
+                time.sleep(0.1)
+                if time.time()-start_time>5:
+                    break
+            
+            logger.info(f"Listening complete. Received {packet_count} packets.")
+            
+            # 4. CANopen Dictionary Operations
+            logger.info("\n=== CANOPEN DICTIONARY OPERATIONS ===")
+            
+            # Example: Read from local CANopen dictionary
+            index = 0x1000  # Example: Device Type
+            subindex = 0
+            
+            logger.info(f"Reading from CANopen dictionary - Index: 0x{index:04X}, Subindex: {subindex}")
+            result = controller.CANOpenReadLocalDict(args.address, index, subindex)
+            
+            if result[0]:
+                value = result[1]
+                size = result[2]
+                value_type = result[3]
+                op_result = result[4]
                 
-                while time.time() - start_time < 5:
-                    # Check buffer state
-                    buffer_state = controller.CANBufferState(args.address)
-                    
-                    if buffer_state[0] and buffer_state[1] > 0:
-                        # Read all available packets
-                        for _ in range(buffer_state[1]):
-                            packet = controller.CANGetPacket(args.address)
-                            
-                            if packet[0]:
-                                can_id = packet[1]
-                                rtr = packet[2]
-                                length = packet[3]
-                                data = packet[4][:length]
-                                
-                                # Format data bytes as hex
-                                data_hex = " ".join([f"0x{b:02X}" for b in data])
-                                
-                                logger.info(f"Received packet:")
-                                logger.info(f"  ID: 0x{can_id:03X}")
-                                logger.info(f"  RTR: {rtr}")
-                                logger.info(f"  Length: {length}")
-                                logger.info(f"  Data: {data_hex}")
-                                
-                                packet_count += 1
-                    
-                    # Wait a bit before checking again
-                    time.sleep(0.1)
+                logger.info(f"Read successful:")
+                logger.info(f"  Value: 0x{value:08X}")
+                logger.info(f"  Size: {size}")
+                logger.info(f"  Type: {value_type}")
+                logger.info(f"  Result Code: 0x{op_result:08X}")
+            else:
+                logger.error("Failed to read from CANopen dictionary")
+            
+            # Example: Write to local CANopen dictionary
+            # Note: This is just an example - only write to dictionary entries
+            # that are writable and that you understand
+            if False:  # Disabled by default for safety
+                index = 0x2000  # Example: Application-specific parameter
+                subindex = 1
+                value = 0x12345678
+                size = 4  # 4 bytes (32-bit)
                 
-                logger.info(f"Listening complete. Received {packet_count} packets.")
-                
-                # 4. CANopen Dictionary Operations
-                logger.info("\n=== CANOPEN DICTIONARY OPERATIONS ===")
-                
-                # Example: Read from local CANopen dictionary
-                index = 0x1000  # Example: Device Type
-                subindex = 0
-                
-                logger.info(f"Reading from CANopen dictionary - Index: 0x{index:04X}, Subindex: {subindex}")
-                result = controller.CANOpenReadLocalDict(args.address, index, subindex)
+                logger.info(f"Writing to CANopen dictionary - Index: 0x{index:04X}, Subindex: {subindex}, Value: 0x{value:08X}")
+                result = controller.CANOpenWriteLocalDict(args.address, index, subindex, value, size)
                 
                 if result[0]:
-                    value = result[1]
-                    size = result[2]
-                    value_type = result[3]
-                    op_result = result[4]
-                    
-                    logger.info(f"Read successful:")
-                    logger.info(f"  Value: 0x{value:08X}")
-                    logger.info(f"  Size: {size}")
-                    logger.info(f"  Type: {value_type}")
-                    logger.info(f"  Result Code: 0x{op_result:08X}")
+                    op_result = result[1]
+                    logger.info(f"Write successful, result code: 0x{op_result:08X}")
                 else:
-                    logger.error("Failed to read from CANopen dictionary")
-                
-                # Example: Write to local CANopen dictionary
-                # Note: This is just an example - only write to dictionary entries
-                # that are writable and that you understand
-                if False:  # Disabled by default for safety
-                    index = 0x2000  # Example: Application-specific parameter
-                    subindex = 1
-                    value = 0x12345678
-                    size = 4  # 4 bytes (32-bit)
-                    
-                    logger.info(f"Writing to CANopen dictionary - Index: 0x{index:04X}, Subindex: {subindex}, Value: 0x{value:08X}")
-                    result = controller.CANOpenWriteLocalDict(args.address, index, subindex, value, size)
-                    
-                    if result[0]:
-                        op_result = result[1]
-                        logger.info(f"Write successful, result code: 0x{op_result:08X}")
-                    else:
-                        logger.error("Failed to write to CANopen dictionary")
+                    logger.error("Failed to write to CANopen dictionary")
             
             logger.info("CAN communication example completed")
             

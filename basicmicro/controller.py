@@ -12,7 +12,7 @@ from typing import Tuple, List, Dict, Any, Optional, Union, Callable
 from basicmicro.commands import Commands
 from basicmicro.utils import initialize_crc_table, calc_mixed
 from basicmicro.types import *
-from basicmicro.exceptions import PacketTimeoutError, CommunicationError
+from basicmicro.exceptions import PacketTimeoutError, CommunicationError, BasicmicroError
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,88 @@ class Basicmicro:
     ESTOP_AUTO_RESET = 0x55
     ESTOP_SW_RESET = 0xAA
     ESTOP_HW_RESET = 0x00
+
+    """
+    RoboClaw Error and Warning Status Bit Definitions
+    Translated from C #defines to Python constants
+    """
+
+    # Error Status Bits (errorStatus.lo - lower 16 bits)
+    ERROR_NONE = 0x0000
+    ERROR_ESTOP = 0x0001
+    ERROR_TEMP = 0x0002
+    ERROR_TEMP2 = 0x0004
+    ERROR_MBATHIGH = 0x0008
+    ERROR_LBATHIGH = 0x0010
+    ERROR_LBATLOW = 0x0020
+
+    # Error Status Bits (errorStatus.hi - upper 16 bits)
+    ERROR_SPEED1 = 0x0100
+    ERROR_SPEED2 = 0x0200
+    ERROR_POS1 = 0x0400
+    ERROR_POS2 = 0x0800
+    ERROR_CURRENTM1 = 0x1000
+    ERROR_CURRENTM2 = 0x2000
+    ERROR_MBATLOW = 0x4000
+    ERROR_MBATHIGH_HYST = 0x8000
+
+    # Warning Status Bits (warnStatus.lo - lower 16 bits)
+    WARN_NONE = 0x0000
+    WARN_OVERCURRENTM1 = 0x0001
+    WARN_OVERCURRENTM2 = 0x0002
+    WARN_MBATHIGH = 0x0004
+    WARN_MBATLOW = 0x0008
+    WARN_TEMP = 0x0010
+    WARN_TEMP2 = 0x0020
+    WARN_S4 = 0x0040  # HOME, LIMITF, LIMITR, SAFESTOP, OFF
+    WARN_S5 = 0x0080  # HOME, LIMITF, LIMITR, SAFESTOP, OFF
+
+    # Warning Status Bits (warnStatus.hi - upper 16 bits)
+    WARN_SPEED1 = 0x0100
+    WARN_SPEED2 = 0x0200
+    WARN_POS1 = 0x0400
+    WARN_POS2 = 0x0800
+    WARN_CAN = 0x1000
+    WARN_BOOT = 0x2000
+    WARN_OVERREGENM1 = 0x4000
+    WARN_OVERREGENM2 = 0x8000
+
+    # Error descriptions for better debugging
+    ERROR_DESCRIPTIONS = {
+        ERROR_ESTOP: "Emergency Stop",
+        ERROR_TEMP: "Temperature Sensor 1 Error",
+        ERROR_TEMP2: "Temperature Sensor 2 Error",
+        ERROR_MBATHIGH: "Main Battery Voltage Too High",
+        ERROR_LBATHIGH: "Logic Battery Voltage Too High",
+        ERROR_LBATLOW: "Logic Battery Voltage Too Low",
+        ERROR_SPEED1: "Motor 1 Speed Error",
+        ERROR_SPEED2: "Motor 2 Speed Error",
+        ERROR_POS1: "Motor 1 Position Error",
+        ERROR_POS2: "Motor 2 Position Error",
+        ERROR_CURRENTM1: "Motor 1 Current Error",
+        ERROR_CURRENTM2: "Motor 2 Current Error",
+        ERROR_MBATLOW: "Main Battery Voltage Too Low",
+        ERROR_MBATHIGH_HYST: "Main Battery Voltage Too High (Hysteresis)",
+    }
+
+    WARNING_DESCRIPTIONS = {
+        WARN_OVERCURRENTM1: "Motor 1 Overcurrent",
+        WARN_OVERCURRENTM2: "Motor 2 Overcurrent",
+        WARN_MBATHIGH: "Main Battery Voltage High Warning",
+        WARN_MBATLOW: "Main Battery Voltage Low Warning",
+        WARN_TEMP: "Temperature Warning",
+        WARN_TEMP2: "Temperature 2 Warning",
+        WARN_S4: "S4 Signal Warning (HOME/LIMITF/LIMITR/SAFESTOP/OFF)",
+        WARN_S5: "S5 Signal Warning (HOME/LIMITF/LIMITR/SAFESTOP/OFF)",
+        WARN_SPEED1: "Motor 1 Speed Warning",
+        WARN_SPEED2: "Motor 2 Speed Warning",
+        WARN_POS1: "Motor 1 Position Warning",
+        WARN_POS2: "Motor 2 Position Warning",
+        WARN_CAN: "CAN Bus Warning",
+        WARN_BOOT: "Boot Warning",
+        WARN_OVERREGENM1: "Motor 1 Over-Regeneration Warning",
+        WARN_OVERREGENM2: "Motor 2 Over-Regeneration Warning",
+    }
 
     def __init__(
         self, 
@@ -735,6 +817,161 @@ class Basicmicro:
         except Exception as e:
             logger.error(f"Error sending random data: {str(e)}")   
 
+    def decode_error_status(error_status):
+        """
+        Decode a 16-bit error status value into human-readable error messages.
+        
+        Args:
+            error_status (int): 16-bit error status value from RoboClaw
+            
+        Returns:
+            tuple: (has_errors, error_list)
+                has_errors (bool): True if any errors are present
+                error_list (list): List of error description strings
+        """
+        errors = []
+        
+        if error_status == ERROR_NONE:
+            return False, ["No errors"]
+        
+        # Check each error bit
+        for error_bit, description in ERROR_DESCRIPTIONS.items():
+            if error_status & error_bit:
+                errors.append(f"ERROR: {description}")
+        
+        return len(errors) > 0, errors
+
+
+    def decode_warning_status(warning_status):
+        """
+        Decode a 16-bit warning status value into human-readable warning messages.
+        
+        Args:
+            warning_status (int): 16-bit warning status value from RoboClaw
+            
+        Returns:
+            tuple: (has_warnings, warning_list)
+                has_warnings (bool): True if any warnings are present
+                warning_list (list): List of warning description strings
+        """
+        warnings = []
+        
+        if warning_status == WARN_NONE:
+            return False, ["No warnings"]
+        
+        # Check each warning bit
+        for warning_bit, description in WARNING_DESCRIPTIONS.items():
+            if warning_status & warning_bit:
+                warnings.append(f"WARNING: {description}")
+        
+        return len(warnings) > 0, warnings
+
+
+    def decode_full_status(combined_status):
+        """
+        Decode a 32-bit combined status value from ReadError command.
+        High 16 bits = warnings, Low 16 bits = errors
+        
+        Args:
+            combined_status (int): 32-bit status value from RoboClaw ReadError command
+            
+        Returns:
+            tuple: (has_errors, has_warnings, error_list, warning_list)
+                has_errors (bool): True if any errors are present
+                has_warnings (bool): True if any warnings are present
+                error_list (list): List of error description strings
+                warning_list (list): List of warning description strings
+        """
+        # Extract error bits (low 16 bits)
+        error_bits = combined_status & 0xFFFF
+        
+        # Extract warning bits (high 16 bits)
+        warning_bits = (combined_status >> 16) & 0xFFFF
+        
+        # Decode errors and warnings
+        has_errors, error_list = decode_error_status(error_bits)
+        has_warnings, warning_list = decode_warning_status(warning_bits)
+        
+        return has_errors, has_warnings, error_list, warning_list
+
+
+    def analyze_roboclaw_status(controller, address):
+        """
+        Read and analyze both error and warning status from RoboClaw ReadError command.
+        
+        Args:
+            controller: Basicmicro controller object
+            address (int): RoboClaw address
+            
+        Returns:
+            dict: Status analysis results
+        """
+        result = {
+            'combined_status_raw': 0,
+            'error_status_raw': 0,
+            'warning_status_raw': 0,
+            'has_errors': False,
+            'has_warnings': False,
+            'errors': [],
+            'warnings': [],
+            'read_success': False
+        }
+        
+        try:
+            # Read combined error/warning status
+            status_result = controller.ReadError(address)
+            if status_result[0]:  # Success
+                result['combined_status_raw'] = status_result[1]
+                result['error_status_raw'] = status_result[1] & 0xFFFF
+                result['warning_status_raw'] = (status_result[1] >> 16) & 0xFFFF
+                
+                # Decode the combined status
+                has_errors, has_warnings, error_list, warning_list = decode_combined_status(status_result[1])
+                
+                result['has_errors'] = has_errors
+                result['has_warnings'] = has_warnings
+                result['errors'] = error_list
+                result['warnings'] = warning_list
+                result['read_success'] = True
+            else:
+                result['errors'] = ["Failed to read error status"]
+                
+        except Exception as e:
+            result['errors'] = [f"Exception reading status: {str(e)}"]
+        
+        return result
+
+    def print_status_analysis(status_result):
+        """
+        Print a formatted analysis of RoboClaw status.
+        
+        Args:
+            status_result (dict): Result from analyze_roboclaw_status()
+        """
+        print(f"=== RoboClaw Status Analysis ===")
+        print(f"Combined Status Raw: 0x{status_result['combined_status_raw']:08X}")
+        print(f"Error Bits (Low 16):  0x{status_result['error_status_raw']:04X}")
+        print(f"Warning Bits (High 16): 0x{status_result['warning_status_raw']:04X}")
+        print()
+        
+        if status_result['has_errors']:
+            print("ERRORS DETECTED:")
+            for error in status_result['errors']:
+                print(f"  • {error}")
+            print()
+        else:
+            print("✓ No errors detected")
+            print()
+        
+        if status_result['has_warnings']:
+            print("WARNINGS DETECTED:")
+            for warning in status_result['warnings']:
+                print(f"  • {warning}")
+            print()
+        else:
+            print("✓ No warnings detected")
+            print()
+    
     # Deprecated functions preserved for backward compatibility
     def ForwardM1(self, address: int, val: int) -> bool:        
         """
@@ -3311,15 +3548,15 @@ class Basicmicro:
         return (False, 0, False, 0, False)
         
     def CANGetESR(self, address: int) -> CANBufferResult:
-        """Gets the count of available CAN packets.
+        """Gets CAN ESR register.
     
         Args:
             address: Controller address (0x80 to 0x87)
     
         Returns:
-            CANBufferResult: (success, count)
+            CANGetESRResult: (success, count)
                 success: True if read successful
-                count: Number of available CAN packets
+                ESR: ESR Register value
         """
         return self._read(address, Commands.CANGETESR, types=["long"])
 
@@ -3367,14 +3604,11 @@ class Basicmicro:
         Returns:
             CANPacketResult: (success, cob_id, RTR, length, data)
                 success: True if read successful
+                valid: True if CAN packet was available
                 cob_id: CAN object identifier
                 RTR: Remote Transmission Request (0 = data frame, 1 = remote frame)
                 length: Length of the data (actual valid bytes)
                 data: List of data bytes (always 8 bytes, padded with zeros)
-            
-        Notes:
-            - Returns success=False if no valid packet is available
-            - First byte of a valid packet is 0xFF (used for internal validation)
         """
         val = self._read(address, Commands.CANGETPACKET, types=["byte", "word", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte", "byte"])
         if val[0]:
@@ -3385,11 +3619,11 @@ class Basicmicro:
                 length = val[4]
                 # Extract data bytes (all 8)
                 data = [val[i+5] for i in range(8)]
-                return (True, cob_id, RTR, length, data)
+                return (True, True, cob_id, RTR, length, data)
             else:
-                logger.debug(f"Invalid packet marker: expected 0xFF, got {val[1]:#x}")
+                return (True, False, 0, 0, 0, [])
     
-        return (False, 0, 0, 0, [])
+        return (False, False, 0, 0, 0, [])
 
     def CANOpenWriteLocalDict(self, address: int, bNodeID: int, wIndex: int, bSubindex: int, lValue: int, bSize: int) -> Tuple[bool, int]:
         """Writes to the local CANopen dictionary.

@@ -107,7 +107,7 @@ def main():
             for pos in positions:
                 buffer = 0  # don't buffer command
                 logger.info(f"Moving to absolute position: {pos}")
-                controller.M1Position(args.address, pos, buffer)
+                controller.PositionM1(args.address, pos, buffer)
                 
                 # Wait for move to complete
                 while True:
@@ -135,7 +135,7 @@ def main():
             buffer = 0
             
             logger.info(f"Moving to position {position} with speed {speed}")
-            controller.M1SpeedPosition(args.address, speed, position, buffer)
+            controller.SpeedPositionM1(args.address, speed, position, buffer)
             
             # Monitor until move completes
             while True:
@@ -154,7 +154,7 @@ def main():
             
             # Move back to zero position
             logger.info("Moving back to home position (0)")
-            controller.M1SpeedPosition(args.address, speed, 0, buffer)
+            controller.SpeedPositionM1(args.address, speed, 0, buffer)
             
             # Wait for move to complete
             while True:

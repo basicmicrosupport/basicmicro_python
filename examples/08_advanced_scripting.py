@@ -91,7 +91,7 @@ def execute_sequence(controller, address, sequence):
         elif cmd['type'] == 'speed_accel':
             controller.SpeedAccelM1M2(address, cmd['accel'], cmd['m1'], cmd['m2'])
         elif cmd['type'] == 'position':
-            controller.MixedPosition(address, cmd['m1'], cmd['m2'], 0)
+            controller.PositionM1M2(address, cmd['m1'], cmd['m2'], 0)
             
             # Wait for position command to complete
             if cmd.get('wait_complete', False):

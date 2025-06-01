@@ -213,7 +213,7 @@ def main():
             buffer = 0  # don't buffer command
             
             logger.info(f"Moving motors to positions: M1={position1}, M2={position2}")
-            controller.MixedPosition(args.address, position1, position2, buffer)
+            controller.PositionM1M2(args.address, position1, position2, buffer)
             
             # Monitor until move completes
             while True:
@@ -232,7 +232,7 @@ def main():
             
             # Return to home position
             logger.info("Returning to home position")
-            controller.MixedPosition(args.address, 0, 0, buffer)
+            controller.PositionM1M2(args.address, 0, 0, buffer)
             
             # Wait for move to complete
             while True:

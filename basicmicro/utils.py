@@ -46,7 +46,11 @@ def calc_mixed(fb: int, lr: int) -> Tuple[int, int]:
         Tuple[int, int]: Tuple of mixed mode values (left_motor, right_motor)
             Both values will be in the range -32767 to +32767
     """
-    if (lr ^ fb) < 0:  # Signs are different?
+    # Force conversion to integers and check if signs are different
+    fb = int(fb)
+    lr = int(lr)
+    
+    if (lr < 0) != (fb < 0):  # Signs are different?
         if abs(lr) > abs(fb):
             out1 = -lr
         else:

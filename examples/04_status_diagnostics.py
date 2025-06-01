@@ -120,11 +120,11 @@ def main():
             pwms = controller.ReadPWMs(args.address)
             if pwms[0]:
                 # Convert to percentage for better readability
-                pwm1_pct = pwms[1] * 100.0 / self.MAX_DUTY
-                pwm2_pct = pwms[2] * 100.0 / self.MAX_DUTY
+                pwm1_pct = pwms[1] * 100.0 / Basicmicro.MAX_DUTY
+                pwm2_pct = pwms[2] * 100.0 / Basicmicro.MAX_DUTY
                 logger.info(f"Motor 1 PWM: {pwms[1]} ({pwm1_pct:.1f}%)")
                 logger.info(f"Motor 2 PWM: {pwms[2]} ({pwm2_pct:.1f}%)")
-            
+                            
             # 4. Continuous Monitoring
             if args.monitor:
                 logger.info("\n=== STARTING CONTINUOUS MONITORING ===")
